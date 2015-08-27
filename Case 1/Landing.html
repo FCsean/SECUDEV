@@ -1,0 +1,28 @@
+<html>
+
+<title>{{.Username}}</title>  
+<body>
+  <h1>Landing Page</h1>
+
+  Personal Details:<br>
+  First name: {{.Fname}}<br>
+  Last name: {{.Lname}}<br>
+  Gender: {{.Gender}}<br>
+  Salutation: {{.Salutation}}<br>
+  Birthday: {{.Bday}}<br>
+  Username: {{.Username}}<br>
+  About Me:
+  <p>{{.About}}</p>
+
+  Admin: {{.Admin}}<br>
+  {{if .Admin}}
+  <a href="/admin">Admin Registration Page</a>
+  {{end}}
+  <a onclick="logout()" href="login">Logout</a>
+</body>
+<script>
+  function logout(){
+    document.cookie = "cookie-name" +'=; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+  }
+</script>
+</html>

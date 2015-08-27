@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<title> Register </title>
+<body>
+<h1>Registration Page</h1>
+<form method="POST" action="/register">
+  Personal Details:<br>
+  First name: <input type="text" name="fname" required><br>
+  Last name: <input type="text" name="lname" required><br>
+
+  Gender:<br>
+  <input type="radio" name="sex" value="male" checked="checked">Male
+  <input type="radio" name="sex" value="female">Female<br>
+
+  Salutation:<br>
+  <select name="salutation">
+    <option value="Mr.">Mr.</option>
+    <option value="Sir">Sir</option>
+    <option value="Senior">Senior</option>
+    <option value="Count">Count</option>
+
+    <option value="Miss">Miss</option>
+    <option value="Ms.">Ms.</option>
+    <option value="Mrs.">Mrs.</option>
+    <option value="Madame">Madame</option>
+    <option value="Majesty">Majesty</option>
+    <option value="Senora">Senora</option>
+  </select><br>
+
+  Birthday (YYYY-MM-DD):<br>
+  <input type="date" name="bday" required><br>
+
+  Username: <input type="text" name="username" required><br>
+  Password: <input type="password" name="password" required><br>
+
+  About Me:<br>
+  <textarea rows="10" cols="50" name="about" placeholder="Tell us about yourself..."></textarea><br>
+  <input type="submit" value="Submit">
+</form>
+<a href="/login">Aleady have an account? Log In here</html>
+</body>
+</html>
