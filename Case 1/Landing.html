@@ -1,24 +1,38 @@
 <html>
 
-<title>{{.Username}}</title>  
+<title>{{.Username}}</title>
+<head>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>  
 <body>
-  <h1>Landing Page</h1>
+  <div class="headerBlue"><img class="hexLogo" src="hexagonLogo.png">
+      <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+      <div class="hexSubText">Department of Defense</div>
+      <div class="logoutText"><a onclick="logout()" href="login">Logout</a></div>
+    </div>
+    <div class="headerRed"></div>
 
-  Personal Details:<br>
-  First name: {{.Fname}}<br>
-  Last name: {{.Lname}}<br>
-  Gender: {{.Gender}}<br>
-  Salutation: {{.Salutation}}<br>
-  Birthday: {{.Bday}}<br>
-  Username: {{.Username}}<br>
-  About Me:
-  <p>{{.About}}</p>
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>Personal Details</h2>
 
-  Admin: {{.Admin}}<br>
-  {{if .Admin}}
-  <a href="/admin">Admin Registration Page</a>
-  {{end}}
-  <a onclick="logout()" href="login">Logout</a>
+      First name: {{.Fname}}<br>
+      Last name: {{.Lname}}<br>
+      Gender: {{.Gender}}<br>
+      Salutation: {{.Salutation}}<br>
+      Birthday: {{.Bday}}<br>
+      Username: {{.Username}}<br>
+      About Me:
+      <p>{{.About}}</p>
+      <br>
+      Admin: {{.Admin}}<br>
+      {{if .Admin}}
+      <a href="/admin">Admin Registration Page</a>
+      {{end}}
+
+      <span class="highlightedText"><h5>//Confidential</h5></span>
+    </div>
+  <div>
 </body>
 <script>
   function logout(){
