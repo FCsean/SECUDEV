@@ -135,7 +135,11 @@ func registerAndAdd(w http.ResponseWriter, r *http.Request, admin bool) {
 	result, err := insertUser.Exec(fname, lname, gender, salutation, fmt.Sprint(bday)[:10], username, password, about, admin)
 	fmt.Println(err)
   fmt.Println(result)
-  http.Redirect(w, r, "/login", 302)
+  if admin {
+    http.Redirect(w, r, "/admin", 302)
+  } else{
+    http.Redirect(w, r, "/login", 302)
+  }
 }
 
 func register(w http.ResponseWriter, r *http.Request) {
