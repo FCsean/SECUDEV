@@ -61,7 +61,7 @@ func SetCookieHandler(w http.ResponseWriter, key, val string) {
 		}
 		http.SetCookie(w, cookie)
 	} else {
-		fmt.Println(err)
+		fmt.Println("cookie: ", err)
 	}
 }
 
@@ -72,7 +72,7 @@ func ReadCookieHandler(r *http.Request, key string) string {
 			return value[key]
 		}
 	} else {
-		fmt.Println(err)
+		fmt.Println("cookie: ", err)
 	}
 	return ""
 }
@@ -132,8 +132,10 @@ func registerAndAdd(w http.ResponseWriter, r *http.Request, admin bool) {
 		fmt.Fprintf(w, "User already exists")
 		return
 	}
-	insertUser.Exec(fname, lname, gender, salutation, fmt.Sprint(bday)[:10], username, password, about, admin)
-	http.Redirect(w, r, "/login", 302)
+	result, err := insertUser.Exec(fname, lname, gender, salutation, fmt.Sprint(bday)[:10], username, password, about, admin)
+	fmt.Println(err)
+  fmt.Println(result)
+  http.Redirect(w, r, "/login", 302)
 }
 
 func register(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +161,11 @@ func admin(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", 302)
 		return
 	}
+  var boolean bool
+  if checkAdmin.QueryRow(ReadCookieHandler(r, "session")).Scan(&boolean); !boolean {
+    fmt.Fprintf(w, "Must be admin to go here.")
+		return
+  }
 	if r.Method == "POST" {
 		adm, _ := strconv.ParseBool(r.FormValue("admin"))
 		registerAndAdd(w, r, adm)
@@ -185,6 +192,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Invalid username or passwowrd")
 			return
 		}
+    rows.Close()
 		SetCookieHandler(w, "session", username)
 		http.Redirect(w, r, "/user", 302)
 	} else if r.Method == "GET" {
@@ -235,7 +243,7 @@ func user(w http.ResponseWriter, r *http.Request) {
 		}
 		t, _ := template.ParseFiles("Landing.html")
 		err := t.Execute(w, data)
-		fmt.Println(err)
+		fmt.Println("user: ", err)
 	}
 }
 
@@ -257,12 +265,14 @@ func main() {
 	fmt.Println(err)
 	checkIfExists, err = db.Prepare("SELECT COUNT(*) FROM USERS WHERE lower(username) = lower(?)")
 	fmt.Println(err)
-	defer db.Close()
-
+  
 	http.HandleFunc("/register", register)
 	http.HandleFunc("/admin", admin) //send user data
 	http.HandleFunc("/login", login)
 	http.HandleFunc("/user", user)
-
+  http.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
+    http.ServeFile(w, r, r.URL.Path[8:])
+})
+	http.HandleFunc("/", register)
 	http.ListenAndServe(":8080", nil)
 }
