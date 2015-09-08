@@ -1,0 +1,5 @@
+* log all errors
+* update templates to follow a base layout
+* clean up html and css
+* teach JM how to go
+
