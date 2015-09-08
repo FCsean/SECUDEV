@@ -9,9 +9,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
-	//	"log"
+	"log"
 	"net/http"
-	"path/filepath"
 	"regexp"
 	"time"
 )
@@ -23,8 +22,18 @@ var cookies = sessions.NewCookieStore([]byte("8136297747713099605187072113499999
 var templates *template.Template
 
 func initTemplates() {
-	files, _ := filepath.Glob("./templates/*.tmpl.html")
-	templates = template.Must(template.ParseFiles(files...))
+	templates = template.Must(template.New("").Funcs(template.FuncMap {
+		"showDate": func(date time.Time) string { return date.Format("Jan 2, 2006") },
+		"showGender": func(gender string) string {
+           	switch gender {
+			case "M": return "Male"
+			case "F": return "Female"
+			default:
+				log.Printf("ERROR: attempted to show unknown gender %q\n", gender)
+				return "Unknown"
+			}
+           },
+	}).ParseGlob("./templates/*.tmpl.html"))
 }
 
 func renderPage(w http.ResponseWriter, template string, data interface{}) {

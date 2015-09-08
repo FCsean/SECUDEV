@@ -18,9 +18,9 @@
 
       First name: {{.Profile.FirstName}}<br>
       Last name: {{.Profile.LastName}}<br>
-      Gender: {{.Profile.Gender}}<br>
+      Gender: {{.Profile.Gender | showGender}}<br>
       Salutation: {{.Profile.Salutation}}<br>
-      Birthday: {{.Profile.Birthday}}<br>
+      Birthday: {{.Profile.Birthday | showDate}}<br>
       About Me:
       <p>{{.Profile.About}}</p>
       <br>
