@@ -1,0 +1,107 @@
+a{
+	color: #FFFFFF;
+	font-weight: bold;
+}
+
+.headerBlue{
+	height: 90px;
+	background: #36364A;
+}
+
+.hexText{
+	position: absolute;
+	left: 160px;
+	top: 6px;
+	font-family: "Times New Roman";
+	font-size: 37pt;
+}
+
+.hexTextSm{
+	font-size: 25pt;
+}
+
+.hexSubText{
+	position: absolute;
+	left: 165px;
+	top: 55px;
+	font-size: 12pt;
+}
+.hexLogo{
+	width: 113px;
+	height: auto;
+	margin-left: 30px;
+	margin-top: 15px;
+}
+
+.headerRed{
+	height: 20px;
+	background: #992525;
+}
+
+.logoutText{
+	position: absolute;
+	right: 20px;
+	top: 60px;
+	font-size: 12pt;
+}
+
+.highlightedText{
+	background-color: #992525;
+}
+
+.logoutText a{
+	color: #FFFFFF;
+}
+
+.loginDiv{
+	width: 30%;
+	height: 100%;
+	background: #1A1A1E;
+}
+
+.pageDiv{
+	width: 45%;
+	height: 100%;
+	background: #1A1A1E;
+}
+
+.loginWrapper{
+	padding-top: 60px;
+	padding-left: 60px;
+	font-size: 20px;
+}
+
+.bodyWrapper{
+	padding-top: 5px;
+	padding-left: 30px;
+}
+
+.textBox{
+	height: 35px;
+	width: 75%;
+}
+
+.loginBtn{
+	background: #858598;
+	color: #1A1A1E;
+	border: none;
+	height: 30px;
+	width: 30%;
+	font-size: 16px;
+	margin-top:5px;
+}
+
+.signUpText{
+	font-size: 16px;
+}
+
+
+body{
+	padding: 0px;
+	margin: 0px;
+	background-color: #0A0A0B;
+	color: #FFFFFF;
+	font-family: "Century Gothic";
+}
+
+<div class="hexText">THE HEXAGON</div>

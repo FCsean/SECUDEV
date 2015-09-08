@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+  <title>The Administrator's Registration Page</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <div class="headerBlue">
+    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>The Administrator's Registration Page</h2>
+      <form method="POST" action="/register">
+        <!-- TODO: use <label>s, remove <br>s -->
+        <strong>Personal Details:</strong><br>
+        First name:<br> <input type="text" name="first_name" required><br>
+        Last name:<br> <input type="text" name="last_name" required><br><br>
+  
+        Gender:<br>
+        <input type="radio" name="gender" value="M" checked="checked">Male
+        <input type="radio" name="gender" value="F">Female<br>
+  
+        Salutation:<br>
+        <select name="salutation">
+          <option value="Mr">Mr</option>
+          <option value="Sir">Sir</option>
+          <option value="Senior">Senior</option>
+          <option value="Count">Count</option>
+  
+          <option value="Miss">Miss</option>
+          <option value="Ms">Ms</option>
+          <option value="Mrs">Mrs</option>
+          <option value="Madame">Madame</option>
+          <option value="Majesty">Majesty</option>
+          <option value="Senora">Senora</option>
+        </select><br>
+  
+        Birthday (YYYY-MM-DD):<br>
+        <input type="date" name="birthday" required><br><br>
+  
+        Username:<br> <input type="text" name="username" required><br>
+        Password:<br> <input type="password" name="password" required><br><br>
+  
+        About Me:<br>
+        <textarea rows="10" cols="50" name="about" placeholder="Tell us about yourself, commander..."></textarea><br><br>
+        
+        Access Level: <br>
+        <select name="access_level">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select><br>
+        
+        <input type="submit" value="Register" class="loginBtn">
+      </form>
+      <br>
+      <a href="/">Back to personal details</a>
+    </div>
+  </div>
+</body>
+</html>

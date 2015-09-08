@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <title>Personal Details</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <div class="headerBlue">
+    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>Personal Details</h2>
+      <!-- TODO: remove <br>s, add username?, use a <table>? -->
+
+      First name: {{.Profile.FirstName}}<br>
+      Last name: {{.Profile.LastName}}<br>
+      Gender: {{.Profile.Gender}}<br>
+      Salutation: {{.Profile.Salutation}}<br>
+      Birthday: {{.Profile.Birthday}}<br>
+      About Me:
+      <p>{{.Profile.About}}</p>
+      <br>
+      
+      {{if .IsAdmin}}
+      <a href="/admin">The Administrator's Registration Page</a>
+      {{end}}
+      
+      <span class="highlightedText"><h5>//Confidential</h5></span>
+    </div>
+  </div>
+</body>
+</html>
