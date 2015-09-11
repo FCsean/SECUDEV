@@ -24,6 +24,7 @@ var templates *template.Template
 func initTemplates() {
 	templates = template.Must(template.New("").Funcs(template.FuncMap {
 		"showDate": func(date time.Time) string { return date.Format("Jan 2, 2006") },
+    "showISODate": func(date time.Time) string { return date.Format("2006-01-02") },
 		"showGender": func(gender string) string {
            	switch gender {
 			case "M": return "Male"
@@ -76,6 +77,82 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func editPage(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isLoggedIn(r) {
+			loginPage(w, r)
+			return
+		}
+
+		userID, _ := getUserID(r)
+		profile := getProfile(userID)
+		if profile == nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+    
+    session, _ := cookies.Get(r, "session")
+    username, _ := session.Values["username"].(string)
+
+		data := struct {
+			Profile *UserProfile
+			IsAdmin bool
+      Username string
+		}{
+			profile,
+			isAdmin(r),
+      username,
+		}
+    
+		renderPage(w, "edit", data)
+	case "POST":
+		password := r.FormValue("password")
+
+    if !isLoggedIn(r) {
+			loginPage(w, r)
+			return
+		}
+
+    accessLevel := r.FormValue("access_level")
+		if accessLevel != "" && !isAdmin(r) {
+			fmt.Fprintf(w, `
+				<body style="background: black; text-align: center;">
+					<video src="/images/gandalf.mp4" autoplay loop>You Shall Not Pass!</video>
+				</body>
+			`)
+			return
+		}
+		admin := accessLevel == "admin"
+    
+		birthday, err := time.Parse("2006-01-02", r.FormValue("birthday"))
+		if err != nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+
+		profile := UserProfile{
+			FirstName:  r.FormValue("first_name"),
+			LastName:   r.FormValue("last_name"),
+			Gender:     r.FormValue("gender"),
+			Salutation: r.FormValue("salutation"),
+			Birthday:   birthday,
+			About:      r.FormValue("about"),
+		}
+
+    session, _ := cookies.Get(r, "session")
+    userID, _ := session.Values["user_id"].(int)
+		err = edit(userID, password, admin, profile)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+    http.Redirect(w, r, "/", http.StatusSeeOther)
+  default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
 func loginPage(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -97,6 +174,7 @@ func loginPage(w http.ResponseWriter, r *http.Request) {
 
 		session, _ := cookies.Get(r, "session")
 		session.Values["user_id"] = userID
+    session.Values["username"] = username
 		session.Save(r, w)
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -110,6 +188,7 @@ func logoutPage(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		session, _ := cookies.Get(r, "session")
 		delete(session.Values, "user_id")
+		delete(session.Values, "username")
 		session.Save(r, w)
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -117,6 +196,7 @@ func logoutPage(w http.ResponseWriter, r *http.Request) {
 		errorPage(w, http.StatusMethodNotAllowed)
 	}
 }
+
 
 func registrationPage(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -135,7 +215,7 @@ func registrationPage(w http.ResponseWriter, r *http.Request) {
 		if accessLevel != "" && !isAdmin(r) {
 			fmt.Fprintf(w, `
 				<body style="background: black; text-align: center;">
-					<video src="/images/gandalf.mp4" autoplay>You Shall Not Pass!</video>
+					<video src="/images/gandalf.mp4" autoplay loop>You Shall Not Pass!</video>
 				</body>
 			`)
 			return
@@ -166,6 +246,7 @@ func registrationPage(w http.ResponseWriter, r *http.Request) {
 		if accessLevel == "" {
 			session, _ := cookies.Get(r, "session")
 			session.Values["user_id"] = userID
+			session.Values["username"] = username
 			session.Save(r, w)
 		}
 
@@ -226,36 +307,45 @@ func age(birthday time.Time) int {
 	return time.Now().Year() - birthday.Year()
 }
 
-func register(username, password string, admin bool, profile UserProfile) (int, error) {
-	if !regexp.MustCompile("^[0-9A-Za-zñ ]{1,50}$").MatchString(profile.FirstName) {
-		return 0, errors.New("Invalid first name.")
+func validateProfile(profile UserProfile) error {
+  if !regexp.MustCompile("^[0-9A-Za-zñ ]{1,50}$").MatchString(profile.FirstName) {
+		return errors.New("Invalid first name.")
 	}
 
 	if !regexp.MustCompile("^[0-9A-Za-zñ ]{1,50}$").MatchString(profile.LastName) {
-		return 0, errors.New("Invalid last name.")
+		return errors.New("Invalid last name.")
 	}
 
 	switch profile.Gender {
 	case "M":
 		if !maleSalutations[profile.Salutation] {
-			return 0, errors.New("Invalid salutation.")
+			return errors.New("Invalid salutation.")
 		}
 	case "F":
 		if !femaleSalutations[profile.Salutation] {
-			return 0, errors.New("Invalid salutation.")
+			return errors.New("Invalid salutation.")
 		}
 	default:
-		return 0, errors.New("Invalid gender.")
+		return errors.New("Invalid gender.")
 	}
 
 	if age(profile.Birthday) <= 18 {
-		return 0, errors.New("Too young.")
+		return errors.New("Too young.")
 	}
 
 	if profile.About == "" {
-		return 0, errors.New("Missing about.")
+		return errors.New("Missing about.")
 	}
+  
+  return nil
+}
 
+func register(username, password string, admin bool, profile UserProfile) (int, error) {
+  err := validateProfile(profile)
+  if err != nil {
+    return 0, err
+  }
+  
 	if !regexp.MustCompile("^[0-9A-Za-z_]{1,50}$").MatchString(username) {
 		return 0, errors.New("Invalid username.")
 	}
@@ -298,6 +388,46 @@ func register(username, password string, admin bool, profile UserProfile) (int, 
 	tx.Commit()
 
 	return int(userID), nil
+}
+
+func edit(userID int, password string, admin bool, profile UserProfile) error {
+  err := validateProfile(profile)
+  if err != nil {
+    return err
+  }
+  
+  db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+  
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+  
+  _, err = tx.Exec("UPDATE user_profile SET first_name = ?, last_name = ?, "+
+		"gender = ?, salutation = ?, birthday = ?, about = ? WHERE account_id = ?",
+		profile.FirstName, profile.LastName, profile.Gender,
+		profile.Salutation, profile.Birthday, profile.About, userID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+  
+  hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), 0)
+  
+  _, err = tx.Exec("UPDATE user_account SET hashed_password = ?, admin = ? WHERE id = ?",
+		hashedPassword, admin, userID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+  
+	tx.Commit()
+  
+  return nil
 }
 
 func login(username, password string) (userID int, ok bool) {
@@ -415,7 +545,8 @@ func main() {
 	http.HandleFunc("/logout", logoutPage)
 	http.HandleFunc("/register", registrationPage)
 	http.HandleFunc("/admin", adminRegistrationPage)
-
+  http.HandleFunc("/edit", editPage)
+  
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
 	http.Handle("/scripts/", http.StripPrefix("/scripts/", http.FileServer(http.Dir("./scripts"))))

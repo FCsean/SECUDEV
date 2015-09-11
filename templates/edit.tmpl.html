@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+  <title>Edit Profile Page</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <div class="headerBlue">
+    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>Edit Profile Page</h2>
+      <form method="POST" action="/edit">
+        <!-- TODO: use <label>s, remove <br>s -->
+        <strong>Personal Details:</strong><br>
+        First name:<br> <input type="text" name="first_name" value="{{.Profile.FirstName}}" required><br>
+        Last name:<br> <input type="text" name="last_name" value="{{.Profile.LastName}}" required><br><br>
+  
+        Gender:<br>
+        <input type="radio" name="gender" value="M" {{if .Profile.Gender | eq "M" }} checked="checked" {{end}} >Male
+        <input type="radio" name="gender" value="F" {{if .Profile.Gender | eq "F" }} checked="checked" {{end}} >Female<br>
+  
+        Salutation:<br>
+        <select name="salutation">
+          <option value="Mr" {{ if .Profile.Gender | eq "Mr" }} selected {{end}} >Mr</option>
+          <option value="Sir" {{ if .Profile.Gender | eq "Sir" }} selected {{end}} >Sir</option>
+          <option value="Senior" {{ if .Profile.Gender | eq "Senior" }} selected {{end}} >Senior</option>
+          <option value="Count" {{ if .Profile.Gender | eq "Count" }} selected {{end}} >Count</option>
+  
+          <option value="Miss" {{ if .Profile.Gender | eq "Miss" }} selected {{end}} >Miss</option>
+          <option value="Ms" {{ if .Profile.Gender | eq "Ms" }} selected {{end}} >Ms</option>
+          <option value="Mrs" {{ if .Profile.Gender | eq "Mrs" }} selected {{end}} >Mrs</option>
+          <option value="Madame" {{ if .Profile.Gender | eq "Madame" }} selected {{end}} >Madame</option>
+          <option value="Majesty" {{ if .Profile.Gender | eq "Majesty" }} selected {{end}} >Majesty</option>
+          <option value="Senora" {{ if .Profile.Gender | eq "Senora" }} selected {{end}} >Senora</option>
+        </select><br>
+  
+        Birthday (YYYY-MM-DD):<br>
+        <input type="date" name="birthday" value="{{.Profile.Birthday | showISODate}}" required><br><br>
+  
+        Username:<br> {{.Username}}<br>
+        Password:<br> <input type="password" name="password" required><br><br>
+  
+        About Me:<br>
+        <textarea rows="10" cols="50" name="about" placeholder="Tell us about yourself, commander...">{{.Profile.About}}</textarea><br><br>
+                
+        {{if .IsAdmin}}
+        Access Level: <br>
+        <select name="access_level">
+          <option value="user">User</option>
+          <option value="admin" selected>Admin</option>
+        </select><br>
+        {{end}}
+                
+        <input type="submit" value="Submit" class="loginBtn">
+      </form>
+    </div>
+  </div>
+</body>
+</html>
