@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"regexp"
 	"time"
+  "strconv"
 )
 
 const DatabaseURL = "file:database.sqlite?cache=shared&mode=rwc"
@@ -67,11 +68,211 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 		data := struct {
 			Profile *UserProfile
 			IsAdmin bool
+      Viewing bool
 		}{
 			profile,
 			isAdmin(r),
+      false,
 		}
 		renderPage(w, "home", data)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func viewPage(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+    id, err := strconv.ParseInt(r.URL.Path[6:], 10, 64)
+		if(err != nil){
+			errorPage(w, http.StatusBadRequest)
+    }
+    userID := int(id)
+    
+    profile := getProfile(userID)
+		if profile == nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+		data := struct {
+			Profile *UserProfile
+			IsAdmin bool
+      Viewing bool
+		}{
+			profile,
+			isAdmin(r),
+      true,
+		}
+		renderPage(w, "home", data)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func messagePost(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		if !isLoggedIn(r) {
+			loginPage(w, r)
+			return
+		}
+
+		userID, _ := getUserID(r)
+		profile := getProfile(userID)
+		if profile == nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+  
+    message := r.FormValue("message")
+    
+    if message == "" {
+      http.Error(w, errors.New("Empty Message.").Error(), http.StatusBadRequest)
+      return
+    }
+    
+    db, err := sql.Open("sqlite3", DatabaseURL)
+    if err != nil {
+      return
+    }
+    defer db.Close()
+
+    tx, err := db.Begin()
+    if err != nil {
+      return
+    }
+
+    _, err = tx.Exec("INSERT INTO messages (account_id, message, date_created) VALUES (?, ?, ?)",
+      userID, message, time.Now())
+    if err != nil {
+      tx.Rollback()
+      return
+    }
+
+    tx.Commit();
+    
+    http.Redirect(w, r, "/", http.StatusSeeOther)
+    
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func editMessageHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+  case "GET":
+    if !isLoggedIn(r) {
+			loginPage(w, r)
+			return
+		}
+    
+    userID, _ := getUserID(r)
+		profile := getProfile(userID)
+		if profile == nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+    
+    message_id := r.URL.Path[14:]
+    
+    err := isMessageCreator(userID, message_id)
+    if err != nil {
+      http.Error(w, err.Error(), http.StatusBadRequest)
+      return
+    }
+    
+    message, err := getMessage(message_id)
+    if(err != nil){
+      http.Error(w, err.Error(), http.StatusBadRequest)
+      return
+    }
+    data := struct {
+			Message string
+			MessageID string
+		}{
+			message,
+			message_id,
+		}
+		renderPage(w, "edit_message", data)
+	case "POST":
+		if !isLoggedIn(r) {
+			loginPage(w, r)
+			return
+		}
+
+		userID, _ := getUserID(r)
+		profile := getProfile(userID)
+		if profile == nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+    
+    message_id := r.FormValue("message_id")
+    message := r.FormValue("message")
+    
+    if message == "" {
+      http.Error(w, errors.New("Empty Message.").Error(), http.StatusBadRequest)
+      return
+    }
+
+    err := isMessageCreator(userID, message_id)
+    if err != nil {
+      http.Error(w, err.Error(), http.StatusBadRequest)
+    }
+    
+    db, err := sql.Open("sqlite3", DatabaseURL)
+    if err != nil {
+      return
+    }
+    defer db.Close()
+
+    
+    tx, err := db.Begin()
+    if err != nil {
+      return
+    }
+
+    _, err = tx.Exec("UPDATE messages SET message = ?, date_edited = ? where id = ?",
+      message, time.Now(), message_id)
+    if err != nil {
+      tx.Rollback()
+      return
+    }
+
+    tx.Commit();
+    
+    http.Redirect(w, r, "/", http.StatusSeeOther)
+   
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func deleteMessageHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+  case "GET":
+    if !isLoggedIn(r) {
+			loginPage(w, r)
+			return
+		}
+    
+    userID, _ := getUserID(r)
+		profile := getProfile(userID)
+		if profile == nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+    
+    message_id := r.URL.Path[8:]
+    
+    err := isMessageCreator(userID, message_id)
+    if err != nil {
+      http.Error(w, err.Error(), http.StatusBadRequest)
+      return
+    }
+   
+    err = deleteMessage(message_id)
+    http.Redirect(w, r, "/", http.StatusSeeOther)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
 	}
@@ -363,8 +564,8 @@ func register(username, password string, admin bool, profile UserProfile) (int, 
 		return 0, err
 	}
 
-	result, err := tx.Exec("INSERT INTO user_account (username, hashed_password, admin) VALUES (?, ?, ?)",
-		username, hashedPassword, admin)
+	result, err := tx.Exec("INSERT INTO user_account (username, hashed_password, admin, date_joined) VALUES (?, ?, ?, ?)",
+		username, hashedPassword, admin, time.Now())
 	if err != nil {
 		tx.Rollback()
 		return 0, err
@@ -459,6 +660,52 @@ func isLoggedIn(req *http.Request) bool {
 	return ok
 }
 
+func getMessage(message_id string) (message string, err error) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+  if err != nil {
+    return "", err
+  }
+  defer db.Close()
+  err = db.QueryRow("SELECT message FROM messages WHERE id=?", message_id).Scan(&message)
+  if err != nil {
+    return "", err
+  }
+  return
+}
+
+func deleteMessage(message_id string) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+  if err != nil {
+    return err
+  }
+  defer db.Close()
+  _, err = db.Exec("DELETE FROM messages WHERE id=?", message_id)
+  if err != nil {
+    return err
+  }
+  return nil
+}
+
+func isMessageCreator(userID int, message_id string) (error) {
+  db, err := sql.Open("sqlite3", DatabaseURL)
+  if err != nil {
+    return err
+  }
+  defer db.Close()
+
+  var count int
+  err = db.QueryRow("SELECT COUNT(*) FROM messages WHERE account_id=? and id=?", userID, message_id).Scan(&count)
+  if err != nil {
+    return err
+  }
+  
+  if count == 0 {
+    return errors.New("Not Message Creator.")
+  }
+  
+  return nil
+}
+
 func isAdmin(req *http.Request) bool {
 	userID, ok := getUserID(req)
 	if !ok {
@@ -506,7 +753,8 @@ func createDB() error {
 					
 			username VARCHAR(50) UNIQUE NOT NULL,
 			hashed_password CHARACTER(60) NOT NULL,
-			admin BOOLEAN NOT NULL DEFAULT FALSE
+			admin BOOLEAN NOT NULL DEFAULT FALSE,
+      date_joined DATE NOT NULL 
 		)
 	`)
 	if err != nil {
@@ -531,6 +779,22 @@ func createDB() error {
 		return err
 	}
 
+  _, err = db.Exec(`
+		CREATE TABLE messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+			account_id INTEGER,
+			
+			message VARCHAR(200) NOT NULL,
+      date_created DATE NOT NULL,
+      date_edited DATE,
+			
+			FOREIGN KEY(account_id) REFERENCES user_account(id)
+		)
+	`)
+	if err != nil {
+		return err
+	}
+  
 	_, err = register("admin", "admin", true, UserProfile{"Admin", "Admin", "M", "Mr", time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC), "Admin"})
 	
 	return err
@@ -546,6 +810,10 @@ func main() {
 	http.HandleFunc("/register", registrationPage)
 	http.HandleFunc("/admin", adminRegistrationPage)
   http.HandleFunc("/edit", editPage)
+  http.HandleFunc("/post", messagePost)
+  http.HandleFunc("/edit message/", editMessageHandler)
+  http.HandleFunc("/view/", viewPage)
+  http.HandleFunc("/delete/", deleteMessageHandler)  
   
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))

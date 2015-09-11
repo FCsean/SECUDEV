@@ -25,6 +25,7 @@
       <p>{{.Profile.About}}</p>
       <br>
       
+      {{if not .Viewing}}
       <a href="/edit"> Edit Profile </a> <br>
       
       {{if .IsAdmin}}
@@ -32,6 +33,12 @@
       {{end}}
       
       <span class="highlightedText"><h5>//Confidential</h5></span>
+      
+      <form method="POST" action="/post">
+        <textarea name="message" style="display:block;width:400px;height:100px;" placeholder="Message here..."></textarea>
+        <input type="submit" value="Post Message" class="loginBtn">
+      </form>
+      {{end}}
     </div>
   </div>
 </body>

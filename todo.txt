@@ -2,4 +2,5 @@
 * update templates to follow a base layout
 * clean up html and css
 * teach JM how to go
-
+* change delete message to post
+* currently using transaction for edit profile, add message, edit message maybe not needed.
