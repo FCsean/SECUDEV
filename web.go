@@ -31,6 +31,13 @@ func initTemplates() {
 		"showISODate": func(date time.Time) string { return date.Format("2006-01-02") },
 		"minus":       func(a, b int) int { return a - b },
 		"add":         func(a, b int) int { return a + b },
+		"boldItalics": func(s string) template.HTML {
+			s = template.HTMLEscapeString(s)
+			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre))&gt;")
+			s = unescapeTags.ReplaceAllString(s, "<$1>")
+			s = regexp.MustCompile("\r?\n").ReplaceAllString(s, "<br>")
+			return template.HTML(s)
+		},
 		"showGender": func(gender string) string {
 			switch gender {
 			case "M":
@@ -876,7 +883,7 @@ func main() {
 	http.HandleFunc("/admin", adminRegistrationPage)
 	http.HandleFunc("/edit", editPage)
 	http.HandleFunc("/post", messagePost)
-	http.HandleFunc("/edit message/", editMessageHandler)
+	http.HandleFunc("/edit-message/", editMessageHandler)
 	http.HandleFunc("/view/", viewPage)
 	http.HandleFunc("/delete/", deleteMessageHandler)
 

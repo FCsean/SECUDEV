@@ -14,7 +14,7 @@
   <div class="pageDiv">
     <div class="bodyWrapper">
       <h2>Edit Message Page</h2>
-      <form method="POST" action="/edit message/{{.MessageID}}">
+      <form method="POST" action="/edit-message/{{.MessageID}}">
         <input type="text" name="message_id" value="{{.MessageID}}" hidden>
         <textarea name="message" style="display:block;width:400px;height:100px;" placeholder="Message here...">{{.Message}}</textarea>
         <input type="submit" value="Edit Message" class="loginBtn">
