@@ -48,7 +48,7 @@
             {{.DateJoined}}
             </td>
             <td>
-            {{.DateCreated}} {{if eq .UserID $.CurrentUser}}<a href="/edit-message/{{.MessageID}}">Edit</a> <a href="/delete/{{.MessageID}}">Delete</a>{{end}}<br>
+            {{.DateCreated}} {{if (or $.IsAdmin (eq .UserID $.CurrentUser))}}<a href="/edit-message/{{.MessageID}}">Edit</a> <a href="/delete/{{.MessageID}}">Delete</a>{{end}}<br>
             {{.Message | boldItalics}}<br>
             {{ if .Edited}}
             {{.DateEdited}}<br>

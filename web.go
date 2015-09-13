@@ -96,7 +96,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 		rows, err := db.Query("SELECT messages.id, message, date_created, date_edited, user_account.id, date_joined, first_name, username "+
 			"FROM user_account, user_profile, messages WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id "+
 			"ORDER BY date_edited DESC "+
-			"LIMIT ? OFFSET ?", messagesPerPage, pageNum-1*int64(messagesPerPage))
+			"LIMIT ? OFFSET ?", messagesPerPage, (pageNum-1)*int64(messagesPerPage))
 		if err != nil {
 			return
 		}
@@ -238,7 +238,7 @@ func editMessageHandler(w http.ResponseWriter, r *http.Request) {
 		message_id := r.URL.Path[14:]
 
 		err := isMessageCreator(userID, message_id)
-		if err != nil {
+		if err != nil && !isAdmin(r) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -278,7 +278,7 @@ func editMessageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		err := isMessageCreator(userID, message_id)
-		if err != nil {
+		if err != nil && !isAdmin(r) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
@@ -327,7 +327,7 @@ func deleteMessageHandler(w http.ResponseWriter, r *http.Request) {
 		message_id := r.URL.Path[8:]
 
 		err := isMessageCreator(userID, message_id)
-		if err != nil {
+		if err != nil && !isAdmin(r) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
