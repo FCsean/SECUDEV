@@ -39,6 +39,25 @@
         <input type="submit" value="Post Message" class="loginBtn">
       </form>
       {{end}}
+      {{range .Messages}}
+        <table border="1" style="width:1024px;">
+          <tr>
+            <td>
+            <a style="display:block;" href="/view/{{.UserID}}">{{.FirstName}}</a>
+            <a style="display:block;" href="/view/{{.UserID}}">{{.Username}}</a>
+            {{.DateJoined}}
+            </td>
+            <td>
+            {{.DateCreated}} {{if eq .UserID $.CurrentUser}}<a href="/edit message/{{.MessageID}}">Edit</a> <a href="/delete/{{.MessageID}}">Delete</a>{{end}}<br>
+            {{.Message}}<br>
+            {{ if .Edited}}
+            {{.DateEdited}}<br>
+            {{ end }}
+            </td>
+          </tr>
+        </table>
+      {{ end }}
+      {{if not (eq .CurrentPage 1)}}<a href="/{{minus .CurrentPage 1}}">Previous</a> {{end}}<a href="/1">1</a>{{if not (eq .PageCount 1)}} <a href="/{{.PageCount}}">{{.PageCount}}</a>{{end}}{{if not (eq .CurrentPage .PageCount)}} <a href="/{{add .CurrentPage 1}}">Next</a>{{end}}
     </div>
   </div>
 </body>

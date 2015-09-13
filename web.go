@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"log"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -22,10 +23,14 @@ var cookies = sessions.NewCookieStore([]byte("8136297747713099605187072113499999
 
 var templates *template.Template
 
+var messagesPerPage = 10
+
 func initTemplates() {
 	templates = template.Must(template.New("").Funcs(template.FuncMap{
 		"showDate":    func(date time.Time) string { return date.Format("Jan 2, 2006") },
 		"showISODate": func(date time.Time) string { return date.Format("2006-01-02") },
+		"minus":       func(a, b int) int { return a - b },
+		"add":         func(a, b int) int { return a + b },
 		"showGender": func(gender string) string {
 			switch gender {
 			case "M":
@@ -60,6 +65,14 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		pageNum, err := strconv.ParseInt(r.URL.Path[1:], 10, 64)
+		if r.URL.Path[1:] == "" {
+			pageNum = 1
+		} else if err != nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+
 		userID, _ := getUserID(r)
 		profile := getProfile(userID)
 		if profile == nil {
@@ -67,15 +80,55 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		db, err := sql.Open("sqlite3", DatabaseURL)
+		if err != nil {
+			return
+		}
+		defer db.Close()
+
+		rows, err := db.Query("SELECT messages.id, message, date_created, date_edited, user_account.id, date_joined, first_name, username "+
+			"FROM user_account, user_profile, messages WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id "+
+			"ORDER BY date_edited DESC "+
+			"LIMIT ? OFFSET ?", messagesPerPage, pageNum-1*int64(messagesPerPage))
+		if err != nil {
+			return
+		}
+
+		var messageCount int
+		err = db.QueryRow("SELECT COUNT(*) FROM user_account, user_profile, messages " +
+			"WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id").Scan(&messageCount)
+		if err != nil {
+			return
+		}
+
+		var messages []Message
+		for rows.Next() {
+			var message Message
+			err = rows.Scan(&message.MessageID, &message.Message, &message.DateCreated, &message.DateEdited, &message.UserID, &message.DateJoined, &message.FirstName, &message.Username)
+			if message.DateEdited != message.DateCreated {
+				message.Edited = true
+			}
+			messages = append(messages, message)
+		}
+
 		data := struct {
-			Profile *UserProfile
-			IsAdmin bool
-			Viewing bool
+			Profile     *UserProfile
+			Messages    []Message
+			CurrentUser int
+			IsAdmin     bool
+			Viewing     bool
+			PageCount   int
+			CurrentPage int
 		}{
 			profile,
+			messages,
+			userID,
 			isAdmin(r),
 			false,
+			int(math.Ceil(float64(messageCount) / float64(messagesPerPage))),
+			int(pageNum),
 		}
+
 		renderPage(w, "home", data)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
@@ -144,8 +197,8 @@ func messagePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = tx.Exec("INSERT INTO messages (account_id, message, date_created) VALUES (?, ?, ?)",
-			userID, message, time.Now())
+		_, err = tx.Exec("INSERT INTO messages (account_id, message, date_created, date_edited) VALUES (?, ?, ?, ?)",
+			userID, message, time.Now(), time.Now())
 		if err != nil {
 			tx.Rollback()
 			return
@@ -478,6 +531,18 @@ type UserProfile struct {
 	Salutation string
 	Birthday   time.Time
 	About      string
+}
+
+type Message struct {
+	FirstName   string
+	Username    string
+	UserID      int
+	DateJoined  time.Time
+	DateCreated time.Time
+	Message     string
+	MessageID   int
+	DateEdited  time.Time
+	Edited      bool
 }
 
 var maleSalutations = stringSet(
