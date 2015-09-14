@@ -741,7 +741,7 @@ func getMessage(message_id string) (message string, err error) {
 	defer db.Close()
 	err = db.QueryRow("SELECT message FROM messages WHERE id=?", message_id).Scan(&message)
 	if err != nil {
-		return "", err
+		return "", errors.New("No such message.")
 	}
 	return
 }
@@ -771,7 +771,7 @@ func isMessageCreator(userID int, message_id string) error {
 	if err != nil {
 		return err
 	}
-
+  
 	if count == 0 {
 		return errors.New("Not Message Creator.")
 	}
