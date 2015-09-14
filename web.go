@@ -27,10 +27,11 @@ var messagesPerPage = 10
 
 func initTemplates() {
 	templates = template.Must(template.New("").Funcs(template.FuncMap{
-		"showDate":    func(date time.Time) string { return date.Format("Jan 2, 2006") },
-		"showISODate": func(date time.Time) string { return date.Format("2006-01-02") },
-		"minus":       func(a, b int) int { return a - b },
-		"add":         func(a, b int) int { return a + b },
+		"showDate":     func(date time.Time) string { return date.Format("Jan 2, 2006") },
+		"showDateTime": func(date time.Time) string { return date.Format(time.RFC850) },
+		"showISODate":  func(date time.Time) string { return date.Format("2006-01-02") },
+		"minus":        func(a, b int) int { return a - b },
+		"add":          func(a, b int) int { return a + b },
 		"boldItalics": func(s string) template.HTML {
 			s = template.HTMLEscapeString(s)
 			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre))&gt;")

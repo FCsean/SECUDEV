@@ -43,15 +43,15 @@
         <table border="1" style="width:1024px;">
           <tr>
             <td>
-            <a style="display:block;" href="/view/{{.UserID}}">{{.FirstName}}</a>
-            <a style="display:block;" href="/view/{{.UserID}}">{{.Username}}</a>
-            {{.DateJoined}}
+            <a href="/view/{{.UserID}}">{{.FirstName}}</a><br>
+            <a href="/view/{{.UserID}}">{{.Username}}</a><br>
+            Date Joined: {{.DateJoined | showDateTime }}
             </td>
             <td>
-            {{.DateCreated}} {{if (or $.IsAdmin (eq .UserID $.CurrentUser))}}<a href="/edit-message/{{.MessageID}}">Edit</a> <a href="/delete/{{.MessageID}}">Delete</a>{{end}}<br>
+            Date Created: {{.DateCreated | showDateTime}} {{if (or $.IsAdmin (eq .UserID $.CurrentUser))}}<a href="/edit-message/{{.MessageID}}">Edit</a> <a href="/delete/{{.MessageID}}">Delete</a>{{end}}<br>
             {{.Message | boldItalics}}<br>
             {{ if .Edited}}
-            {{.DateEdited}}<br>
+            Date Edited: {{.DateEdited | showDateTime}}<br>
             {{ end }}
             </td>
           </tr>
