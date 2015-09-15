@@ -34,6 +34,8 @@ func initTemplates() {
 		"add":          func(a, b int) int { return a + b },
 		"boldItalics": func(s string) template.HTML {
 			s = template.HTMLEscapeString(s)
+			imageTags := regexp.MustCompile("&lt;(img\\s+src=)&#34;(.*)&#34;&gt;")
+			s = imageTags.ReplaceAllString(s, "<$1\"$2\" style=\"max-width:570px;\">")
 			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre))&gt;")
 			s = unescapeTags.ReplaceAllString(s, "<$1>")
 			s = regexp.MustCompile("\r?\n").ReplaceAllString(s, "<br>")
@@ -312,7 +314,7 @@ func editMessageHandler(w http.ResponseWriter, r *http.Request) {
 
 func deleteMessageHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case "GET":
+	case "POST":
 		if !isLoggedIn(r) {
 			loginPage(w, r)
 			return
@@ -325,7 +327,7 @@ func deleteMessageHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		message_id := r.URL.Path[8:]
+		message_id := r.FormValue("messageID")
 
 		err := isMessageCreator(userID, message_id)
 		if err != nil && !isAdmin(r) {
@@ -771,7 +773,7 @@ func isMessageCreator(userID int, message_id string) error {
 	if err != nil {
 		return err
 	}
-  
+
 	if count == 0 {
 		return errors.New("Not Message Creator.")
 	}
@@ -886,7 +888,7 @@ func main() {
 	http.HandleFunc("/post", messagePost)
 	http.HandleFunc("/edit-message/", editMessageHandler)
 	http.HandleFunc("/view/", viewPage)
-	http.HandleFunc("/delete/", deleteMessageHandler)
+	http.HandleFunc("/delete", deleteMessageHandler)
 
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))

@@ -38,7 +38,7 @@
       &lt;b&gt;
       &lt;i&gt;
       &lt;pre&gt;
-      
+      &lt;img src=""&gt;
       <form method="POST" action="/post">
         <textarea name="message" style="display:block;width:400px;height:100px;" placeholder="Message here..."></textarea>
         <input type="submit" value="Post Message" class="loginBtn">
@@ -53,7 +53,8 @@
           Date Joined: {{.DateJoined | showDateTime }}
           </td>
           <td>
-          Date Created: {{.DateCreated | showDateTime}} {{if (or $.IsAdmin (eq .UserID $.CurrentUser))}}<a href="/edit-message/{{.MessageID}}">Edit</a> <a href="/delete/{{.MessageID}}">Delete</a>{{end}}<br>
+          Date Created: {{.DateCreated | showDateTime}} {{if (or $.IsAdmin (eq .UserID $.CurrentUser))}}<a href="/edit-message/{{.MessageID}}">Edit</a> 
+          <form style="display:inline;" action="/delete" method="POST"><input type="hidden" value="{{.MessageID}}" name="messageID"><input type="submit" value="Delete" class="notAButton"></form>{{end}}<br>
           {{.Message | boldItalics}}<br>
           {{ if .Edited}}
           Date Edited: {{.DateEdited | showDateTime}}<br>
