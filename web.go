@@ -34,8 +34,8 @@ func initTemplates() {
 		"add":          func(a, b int) int { return a + b },
 		"boldItalics": func(s string) template.HTML {
 			s = template.HTMLEscapeString(s)
-			imageTags := regexp.MustCompile("&lt;(img\\s+src=)&#34;(.*)&#34;&gt;")
-			s = imageTags.ReplaceAllString(s, "<$1\"$2\" style=\"max-width:570px;\">")
+			imageTags := regexp.MustCompile(`&lt;img\s+src=&#34;(.*?)&#34;&gt;`)
+			s = imageTags.ReplaceAllString(s, `<img src="$1" style="max-width:570px;">`)
 			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre))&gt;")
 			s = unescapeTags.ReplaceAllString(s, "<$1>")
 			s = regexp.MustCompile("\r?\n").ReplaceAllString(s, "<br>")
