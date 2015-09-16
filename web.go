@@ -36,7 +36,7 @@ func initTemplates() {
 			s = template.HTMLEscapeString(s)
 			imageTags := regexp.MustCompile(`&lt;img\s+src=&#34;(.*?)&#34;&gt;`)
 			s = imageTags.ReplaceAllString(s, `<img src="$1" style="max-width:570px;">`)
-			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre))&gt;")
+			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre|u|sub|sup|strike))&gt;")
 			s = unescapeTags.ReplaceAllString(s, "<$1>")
 			s = regexp.MustCompile("\r?\n").ReplaceAllString(s, "<br>")
 			return template.HTML(s)
