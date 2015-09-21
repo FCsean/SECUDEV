@@ -17,6 +17,7 @@
       <form method="POST" action="/edit-message/{{.MessageID}}">
         <input type="text" name="message_id" value="{{.MessageID}}" hidden>
         <textarea name="message" style="display:block;width:400px;height:100px;" placeholder="Message here...">{{.Message}}</textarea>
+        <input type="hidden" value="{{.UserID}}" name="user_id">
         <input type="submit" value="Edit Message" class="loginBtn">
       </form>
       <br>

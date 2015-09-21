@@ -54,7 +54,8 @@
           <option value="admin" selected>Admin</option>
         </select><br>
         {{end}}
-                
+        
+        <input type="hidden" value="{{.UserID}}" name="user_id">
         <input type="submit" value="Submit" class="loginBtn">
       </form>
     </div>

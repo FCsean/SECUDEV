@@ -124,7 +124,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 		data := struct {
 			Profile     *UserProfile
 			Messages    []Message
-			CurrentUser int
+			UserID      int
 			IsAdmin     bool
 			Viewing     bool
 			PageCount   int
@@ -183,6 +183,10 @@ func messagePost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		userID, _ := getUserID(r)
+		if v, _ := strconv.Atoi(r.FormValue("user_id")); v != userID {
+			http.Error(w, "Currently logged in as a different user. Refresh please.", http.StatusBadRequest)
+			return
+		}
 		profile := getProfile(userID)
 		if profile == nil {
 			errorPage(w, http.StatusBadRequest)
@@ -254,9 +258,11 @@ func editMessageHandler(w http.ResponseWriter, r *http.Request) {
 		data := struct {
 			Message   string
 			MessageID string
+			UserID    int
 		}{
 			message,
 			message_id,
+			userID,
 		}
 		renderPage(w, "edit_message", data)
 	case "POST":
@@ -266,6 +272,12 @@ func editMessageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		userID, _ := getUserID(r)
+
+		if v, _ := strconv.Atoi(r.FormValue("user_id")); v != userID {
+			http.Error(w, "Currently logged in as a different user. Refresh please.", http.StatusBadRequest)
+			return
+		}
+
 		profile := getProfile(userID)
 		if profile == nil {
 			errorPage(w, http.StatusBadRequest)
@@ -321,6 +333,11 @@ func deleteMessageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		userID, _ := getUserID(r)
+		if v, _ := strconv.Atoi(r.FormValue("user_id")); v != userID {
+			http.Error(w, "Currently logged in as a different user. Refresh please.", http.StatusBadRequest)
+			return
+		}
+
 		profile := getProfile(userID)
 		if profile == nil {
 			errorPage(w, http.StatusBadRequest)
@@ -364,10 +381,12 @@ func editPage(w http.ResponseWriter, r *http.Request) {
 			Profile  *UserProfile
 			IsAdmin  bool
 			Username string
+			UserID   int
 		}{
 			profile,
 			isAdmin(r),
 			username,
+			userID,
 		}
 
 		renderPage(w, "edit", data)
@@ -407,6 +426,12 @@ func editPage(w http.ResponseWriter, r *http.Request) {
 
 		session, _ := cookies.Get(r, "session")
 		userID, _ := session.Values["user_id"].(int)
+
+		if v, _ := strconv.Atoi(r.FormValue("user_id")); v != userID {
+			http.Error(w, "Currently logged in as a different user. Refresh please.", http.StatusBadRequest)
+			return
+		}
+
 		err = edit(userID, password, admin, profile)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
