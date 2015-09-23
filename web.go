@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"github.com/gorilla/context"
@@ -12,6 +14,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -96,11 +99,8 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 		}
 		defer db.Close()
 
-		rows, err := db.Query("SELECT messages.id, message, date_created, date_edited, user_account.id, date_joined, first_name, username "+
-			"FROM user_account, user_profile, messages WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id "+
-			"ORDER BY date_edited DESC "+
-			"LIMIT ? OFFSET ?", messagesPerPage, (pageNum-1)*int64(messagesPerPage))
-		if err != nil {
+		rows := getMessages(messagesPerPage, int((pageNum-1)*int64(messagesPerPage)))
+		if rows == nil {
 			return
 		}
 
@@ -559,6 +559,27 @@ func adminRegistrationPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func backUpMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+
+		renderPage(w, "backup", nil)
+	case "POST":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		backUpMessages()
+		http.Redirect(w, r, "/backup", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
 type UserProfile struct {
 	FirstName  string
 	LastName   string
@@ -606,6 +627,34 @@ func stringSet(strings ...string) map[string]bool {
 
 func age(birthday time.Time) int {
 	return time.Now().Year() - birthday.Year()
+}
+
+func backUpMessages() {
+	if _, err := os.Stat("backups"); os.IsNotExist(err) {
+		os.Mkdir("backups", os.ModeDir)
+	}
+	f, err := os.Create("backups\\" + time.Now().Format("2006-01-02-150405") + ".csv")
+	defer f.Close()
+	w := csv.NewWriter(bufio.NewWriter(f))
+	rows := getAllMessages()
+	var message [4]string
+	w.Write([]string{"sep=,"})
+	w.Write([]string{"Username", "Date Posted", "Date Edited", "Message"})
+	for rows.Next() {
+		var posted, edited time.Time
+		err = rows.Scan(&message[0], &posted, &edited, &message[3])
+		message[1] = posted.Format(time.RFC850)
+		message[2] = edited.Format(time.RFC850)
+		message[3] = regexp.MustCompile("\r?\n").ReplaceAllString(message[3], "<br>")
+		if err != nil {
+			return
+		}
+		err = w.Write(message[:])
+		if err != nil {
+			return
+		}
+	}
+
 }
 
 func validateProfile(profile UserProfile) error {
@@ -840,6 +889,41 @@ func getProfile(userID int) *UserProfile {
 	return &profile
 }
 
+func getMessages(limit, offset int) *sql.Rows {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT messages.id, message, date_created, date_edited, user_account.id, date_joined, first_name, username "+
+		"FROM user_account, user_profile, messages WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id "+
+		"ORDER BY date_edited DESC "+
+		"LIMIT ? OFFSET ?", limit, offset)
+
+	if err != nil {
+		return nil
+	}
+	return rows
+}
+
+func getAllMessages() *sql.Rows {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT username, date_created, date_edited, message " +
+		"FROM user_account, user_profile, messages WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id " +
+		"ORDER BY date_edited DESC")
+
+	if err != nil {
+		return nil
+	}
+	return rows
+}
+
 func createDB() error {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
@@ -914,6 +998,7 @@ func main() {
 	http.HandleFunc("/edit-message/", editMessageHandler)
 	http.HandleFunc("/view/", viewPage)
 	http.HandleFunc("/delete", deleteMessageHandler)
+	http.HandleFunc("/backup", backUpMessagesHandler)
 
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
