@@ -638,7 +638,6 @@ func backUpMessages() {
 	w := csv.NewWriter(bufio.NewWriter(f))
 	rows := getAllMessages()
 	var message [4]string
-	w.Write([]string{"sep=,"})
 	w.Write([]string{"Username", "Date Posted", "Date Edited", "Message"})
 	for rows.Next() {
 		var posted, edited time.Time
