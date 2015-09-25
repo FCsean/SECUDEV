@@ -14,8 +14,14 @@
   <div class="pageDiv">
     <div class="bodyWrapper">
       <h2>BackUp Page</h2>  
-      <a href="/">Back to personal details</a>
+      
       <form method="POST" action="/backup"> <input type="submit" value="Back Up"> </form>
+      <h2>Files: </h2>
+      {{ range .Files }}
+        <a href="/download/{{.Name}}" >{{.Name}}</a><br>
+      {{ end}}
+      
+      <a href="/">Back to personal details</a>
     </div>
   </div>
 </body>

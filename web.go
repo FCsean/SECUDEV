@@ -11,6 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -26,7 +27,8 @@ var cookies = sessions.NewCookieStore([]byte("8136297747713099605187072113499999
 
 var templates *template.Template
 
-var messagesPerPage = 10
+const messagesPerPage = 10
+const backUpDirectory = "backups\\"
 
 func initTemplates() {
 	templates = template.Must(template.New("").Funcs(template.FuncMap{
@@ -559,6 +561,20 @@ func adminRegistrationPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func downloadFilesHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		http.ServeFile(w, r, backUpDirectory+r.URL.Path[10:])
+		return
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
 func backUpMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -567,7 +583,13 @@ func backUpMessagesHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		renderPage(w, "backup", nil)
+		files, _ := ioutil.ReadDir(backUpDirectory)
+		data := struct {
+			Files []os.FileInfo
+		}{
+			files,
+		}
+		renderPage(w, "backup", data)
 	case "POST":
 		if !isAdmin(r) {
 			http.Redirect(w, r, "/", http.StatusFound)
@@ -633,7 +655,7 @@ func backUpMessages() {
 	if _, err := os.Stat("backups"); os.IsNotExist(err) {
 		os.Mkdir("backups", os.ModeDir)
 	}
-	f, err := os.Create("backups\\" + time.Now().Format("2006-01-02-150405") + ".csv")
+	f, err := os.Create(backUpDirectory + time.Now().Format("2006-01-02-150405") + ".csv")
 	defer f.Close()
 	w := csv.NewWriter(bufio.NewWriter(f))
 	rows := getAllMessages()
@@ -998,7 +1020,7 @@ func main() {
 	http.HandleFunc("/view/", viewPage)
 	http.HandleFunc("/delete", deleteMessageHandler)
 	http.HandleFunc("/backup", backUpMessagesHandler)
-
+	http.HandleFunc("/download/", downloadFilesHandler)
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
 	http.Handle("/scripts/", http.StripPrefix("/scripts/", http.FileServer(http.Dir("./scripts"))))
