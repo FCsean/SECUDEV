@@ -108,6 +108,12 @@ a{
 }
 
 
+.Search {
+  display: inline;
+  left: 500px;
+  position: relative;
+}
+
 body{
 	padding: 0px;
 	margin: 0px;

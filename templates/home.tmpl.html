@@ -4,9 +4,10 @@
   <link rel="stylesheet" type="text/css" href="/styles/style.css">
 <body>
   <div class="headerBlue">
-    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <a href="/" style="font-weight:normal;"><img class="hexLogo" src="/images/hexagonLogo.png">
      <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
-     <div class="hexSubText">Department of Defense</div>
+     <div class="hexSubText">Department of Defense</div></a>
+      <form class="Search" action="/search" method="GET"><input type="textarea" name="q"><input type="hidden" value="1" name="p"><input type="submit" value="Search"></form>
      <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
   </div>
   <div class="headerRed"></div>

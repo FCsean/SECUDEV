@@ -41,7 +41,7 @@ func initTemplates() {
 			s = template.HTMLEscapeString(s)
 			imageTags := regexp.MustCompile(`&lt;img\s+src=&#34;(.*?)&#34;&gt;`)
 			s = imageTags.ReplaceAllString(s, `<img src="$1" style="max-width:570px;">`)
-			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre|u|sub|sup|strike))&gt;")
+			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre|u|sub|sup|strike|marquee))&gt;")
 			s = unescapeTags.ReplaceAllString(s, "<$1>")
 			s = regexp.MustCompile("\r?\n").ReplaceAllString(s, "<br>")
 			return template.HTML(s)
@@ -80,7 +80,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		pageNum, err := strconv.ParseInt(r.URL.Path[1:], 10, 64)
+		pageNum, err := strconv.Atoi(r.URL.Path[1:])
 		if r.URL.Path[1:] == "" {
 			pageNum = 1
 		} else if err != nil {
@@ -101,26 +101,18 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 		}
 		defer db.Close()
 
-		rows := getMessages(messagesPerPage, int((pageNum-1)*int64(messagesPerPage)))
+		rows := getMessages(messagesPerPage, (pageNum-1)*messagesPerPage)
 		if rows == nil {
 			return
 		}
+
+		messages := rowToMessageArray(rows)
 
 		var messageCount int
 		err = db.QueryRow("SELECT COUNT(*) FROM user_account, user_profile, messages " +
 			"WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id").Scan(&messageCount)
 		if err != nil {
 			return
-		}
-
-		var messages []Message
-		for rows.Next() {
-			var message Message
-			err = rows.Scan(&message.MessageID, &message.Message, &message.DateCreated, &message.DateEdited, &message.UserID, &message.DateJoined, &message.FirstName, &message.Username)
-			if message.DateEdited != message.DateCreated {
-				message.Edited = true
-			}
-			messages = append(messages, message)
 		}
 
 		data := struct {
@@ -150,11 +142,10 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 func viewPage(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		id, err := strconv.ParseInt(r.URL.Path[6:], 10, 64)
+		userID, err := strconv.Atoi(r.URL.Path[6:])
 		if err != nil {
 			errorPage(w, http.StatusBadRequest)
 		}
-		userID := int(id)
 
 		profile := getProfile(userID)
 		if profile == nil {
@@ -569,7 +560,49 @@ func downloadFilesHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.ServeFile(w, r, backUpDirectory+r.URL.Path[10:])
-		return
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func searchHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isLoggedIn(r) {
+			loginPage(w, r)
+			return
+		}
+		userID, _ := getUserID(r)
+		profile := getProfile(userID)
+		if profile == nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+		query := r.FormValue("q")
+		pageNum, err := strconv.Atoi(r.FormValue("p"))
+		if err != nil {
+			pageNum = 1
+		}
+
+		messageCount, messages := search(query, messagesPerPage, (pageNum-1)*messagesPerPage)
+		data := struct {
+			Profile     *UserProfile
+			Messages    []Message
+			UserID      int
+			IsAdmin     bool
+			PageCount   int
+			CurrentPage int
+			Query       string
+		}{
+			profile,
+			messages,
+			userID,
+			isAdmin(r),
+			int(math.Ceil(float64(messageCount) / float64(messagesPerPage))),
+			int(pageNum),
+			query,
+		}
+		renderPage(w, "search", data)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
 	}
@@ -649,6 +682,41 @@ func stringSet(strings ...string) map[string]bool {
 
 func age(birthday time.Time) int {
 	return time.Now().Year() - birthday.Year()
+}
+
+func search(query string, limit int, offset int) (int, []Message) {
+	query = "%" + query + "%"
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return 0, nil
+	}
+	defer db.Close()
+	var count int
+	err = db.QueryRow("SELECT count(*) "+
+		"FROM user_account, user_profile, messages WHERE user_account.id=user_profile.account_id AND user_account.id=messages.account_id "+
+		"AND (message LIKE ? OR username LIKE ? OR first_name LIKE ? OR last_name LIKE ?) ", query, query, query, query).Scan(&count)
+	if offset > count {
+		offset = count / 10 * 10
+	}
+	rows, err := db.Query("SELECT messages.id, message, date_created, date_edited, user_account.id, date_joined, first_name, username "+
+		"FROM user_account, user_profile, messages WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id "+
+		"AND (message LIKE ? OR username LIKE ? OR first_name LIKE ? OR last_name LIKE ?) "+
+		"ORDER BY date_edited DESC "+
+		"LIMIT ? OFFSET ?", query, query, query, query, limit, offset)
+	return count, rowToMessageArray(rows)
+}
+
+func rowToMessageArray(rows *sql.Rows) []Message {
+	var messages []Message
+	for rows.Next() {
+		var message Message
+		rows.Scan(&message.MessageID, &message.Message, &message.DateCreated, &message.DateEdited, &message.UserID, &message.DateJoined, &message.FirstName, &message.Username)
+		if message.DateEdited != message.DateCreated {
+			message.Edited = true
+		}
+		messages = append(messages, message)
+	}
+	return messages
 }
 
 func backUpMessages() {
@@ -1021,6 +1089,7 @@ func main() {
 	http.HandleFunc("/delete", deleteMessageHandler)
 	http.HandleFunc("/backup", backUpMessagesHandler)
 	http.HandleFunc("/download/", downloadFilesHandler)
+	http.HandleFunc("/search", searchHandler)
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
 	http.Handle("/scripts/", http.StripPrefix("/scripts/", http.FileServer(http.Dir("./scripts"))))

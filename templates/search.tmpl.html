@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+  <title>Personal Details</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <div class="headerBlue">
+     <a href="/" style="font-weight:normal;"><img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div></a>
+      <form class="Search" action="/search" method="GET"><input type="textarea" name="q"><input type="hidden" value="1" name="p"><input type="submit" value="Search"></form>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      
+      <table border="1" style="width:1024px;">
+      {{ if eq .PageCount 0}}
+        No messages found.
+      {{ else }}
+        {{range .Messages}}
+          <tr>
+            <td>
+            <a href="/view/{{.UserID}}">{{.FirstName}}</a><br>
+            <a href="/view/{{.UserID}}">{{.Username}}</a><br>
+            Date Joined: {{.DateJoined | showDateTime }}
+            </td>
+            <td>
+            Date Created: {{.DateCreated | showDateTime}} {{if (or $.IsAdmin (eq .UserID $.UserID))}}<a href="/edit-message/{{.MessageID}}">Edit</a> 
+            <form style="display:inline;" action="/delete" method="POST">
+            <input type="hidden" value="{{.MessageID}}" name="messageID">
+            <input type="hidden" value="{{.UserID}}" name="user_id">
+            <input type="submit" value="Delete" class="notAButton">
+            </form>{{end}}<br>
+            {{.Message | boldItalics}}<br>
+            {{ if .Edited}}
+            Date Edited: {{.DateEdited | showDateTime}}<br>
+            {{ end }}
+            </td>
+          </tr>
+        {{end}}
+        </table>
+        {{if not (eq .CurrentPage 1)}}<a href="/search?q={{.Query}}&p={{minus .CurrentPage 1}}">Previous</a> {{end}}
+        <a href="/search?q={{.Query}}&p=1">1</a>
+        {{if not (eq .PageCount 1)}} <a href="/search?q={{.Query}}&p={{.PageCount}}">{{.PageCount}}</a>{{end}}
+        {{if not (eq .CurrentPage .PageCount)}} <a href="/search?q={{.Query}}&p={{add .CurrentPage 1}}">Next</a>{{end}}
+      {{ end }}
+    </div>
+  </div>
+</body>
+</html>
