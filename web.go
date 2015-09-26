@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
+	"html"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -18,6 +19,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -56,6 +58,16 @@ func initTemplates() {
 				log.Printf("ERROR: attempted to show unknown gender %q\n", gender)
 				return "Unknown"
 			}
+		},
+		"unescape": func(s string) string {
+			s = html.UnescapeString(s)
+			s = strings.Replace(s, "%3C", "<", -1)
+			s = strings.Replace(s, "%3D", "=", -1)
+			s = strings.Replace(s, "%3E", ">", -1)
+			s = strings.Replace(s, "%3c", "<", -1)
+			s = strings.Replace(s, "%3d", "=", -1)
+			s = strings.Replace(s, "%3e", ">", -1)
+			return s
 		},
 	}).ParseGlob("./templates/*.tmpl.html"))
 }
@@ -608,6 +620,83 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func advancedSearchHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isLoggedIn(r) {
+			loginPage(w, r)
+			return
+		}
+		userID, _ := getUserID(r)
+		profile := getProfile(userID)
+		if profile == nil {
+			errorPage(w, http.StatusBadRequest)
+			return
+		}
+
+		pageNum, err := strconv.Atoi(r.FormValue("p"))
+		if err != nil {
+			pageNum = 1
+		}
+		inputs := 1
+		options := []string{"date_created", "date_edited", "first_name", "username", "last_name"}
+		comparison := []string{"<=", ">=", "="}
+		var values []string
+		var andor []string
+		var check []string
+		var operator []string
+		for r.FormValue("value"+strconv.Itoa(inputs)) != "" {
+			checkForm := "check" + strconv.Itoa(inputs)
+			if !contains(r.FormValue(checkForm), options) {
+				errorPage(w, http.StatusBadRequest)
+				return
+			}
+			check = append(check, r.FormValue(checkForm))
+
+			operatorForm := "operator" + strconv.Itoa(inputs)
+			if !contains(r.FormValue(operatorForm), comparison) {
+				errorPage(w, http.StatusBadRequest)
+				return
+			}
+			operator = append(operator, r.FormValue(operatorForm))
+
+			if inputs != 1 {
+				andorForm := "andor" + strconv.Itoa(inputs)
+				andorVal := r.FormValue(andorForm)
+				if !(andorVal == "OR" || andorVal == "AND") {
+					errorPage(w, http.StatusBadRequest)
+					return
+				}
+				andor = append(andor, andorVal)
+			}
+
+			values = append(values, r.FormValue("value"+strconv.Itoa(inputs)))
+			inputs++
+		}
+		messageCount, messages := advancedSearch(values, andor, check, operator, messagesPerPage, (pageNum-1)*messagesPerPage)
+		data := struct {
+			Profile     *UserProfile
+			Messages    []Message
+			UserID      int
+			IsAdmin     bool
+			PageCount   int
+			CurrentPage int
+			Query       string
+		}{
+			profile,
+			messages,
+			userID,
+			isAdmin(r),
+			int(math.Ceil(float64(messageCount) / float64(messagesPerPage))),
+			int(pageNum),
+			regexp.MustCompile("p=\\d+").ReplaceAllString(r.URL.RawQuery, ""),
+		}
+		renderPage(w, "advanced-search", data)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
 func backUpMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -703,6 +792,38 @@ func search(query string, limit int, offset int) (int, []Message) {
 		"AND (message LIKE ? OR username LIKE ? OR first_name LIKE ? OR last_name LIKE ?) "+
 		"ORDER BY date_edited DESC "+
 		"LIMIT ? OFFSET ?", query, query, query, query, limit, offset)
+	return count, rowToMessageArray(rows)
+}
+
+func advancedSearch(values, andor, check, operator []string, limit, offset int) (int, []Message) {
+	if len(values) <= 0 {
+		return 0, nil
+	}
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return 0, nil
+	}
+	defer db.Close()
+	selectMessages := "SELECT messages.id, message, date_created, date_edited, user_account.id, date_joined, first_name, username "
+	selectCount := "SELECT COUNT(*) "
+	statement := "FROM user_account, user_profile, messages WHERE user_account.id=user_profile.account_id and user_account.id=messages.account_id " +
+		"AND ("
+	args := []interface{}{}
+	for i := 0; i < len(values); i++ {
+		if i != len(values)-1 {
+			statement += check[i] + " " + operator[i] + " ? " + andor[i] + " "
+		} else {
+			statement += check[i] + " " + operator[i] + " ?) "
+		}
+		args = append(args, values[i])
+	}
+	var count int
+	db.QueryRow(selectCount+statement, args...).Scan(&count)
+	statement += "ORDER BY date_edited DESC "
+	statement += "LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	rows, err := db.Query(selectMessages+statement, args...)
+
 	return count, rowToMessageArray(rows)
 }
 
@@ -978,6 +1099,15 @@ func getProfile(userID int) *UserProfile {
 	return &profile
 }
 
+func contains(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
 func getMessages(limit, offset int) *sql.Rows {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
@@ -1090,6 +1220,7 @@ func main() {
 	http.HandleFunc("/backup", backUpMessagesHandler)
 	http.HandleFunc("/download/", downloadFilesHandler)
 	http.HandleFunc("/search", searchHandler)
+	http.HandleFunc("/advanced-search", advancedSearchHandler)
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
 	http.Handle("/scripts/", http.StripPrefix("/scripts/", http.FileServer(http.Dir("./scripts"))))

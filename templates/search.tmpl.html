@@ -19,6 +19,7 @@
       {{ if eq .PageCount 0}}
         No messages found.
       {{ else }}
+        <table border="1" style="width:1024px;">
         {{range .Messages}}
           <tr>
             <td>

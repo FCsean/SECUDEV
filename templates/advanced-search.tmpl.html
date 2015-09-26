@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+  <title>Personal Details</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <div class="headerBlue">
+     <a href="/" style="font-weight:normal;"><img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div></a>
+      <form class="Search" action="/search" method="GET"><input type="textarea" name="q"><input type="hidden" value="1" name="p"><input type="submit" value="Search"></form>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+        <button onclick="addInput()">+</button>
+        Dates should be in the form of YYYY-MM-DD
+        <form id="AdvancedSearch" method="GET" action="advanced-search">
+          <input type="submit" value="Search">
+        </form>
+    {{ if eq .PageCount 0}}
+      No messages found.
+    {{ else }}
+    <table border="1" style="width:1024px;">
+    {{range .Messages}}
+      <tr>
+        <td>
+        <a href="/view/{{.UserID}}">{{.FirstName}}</a><br>
+        <a href="/view/{{.UserID}}">{{.Username}}</a><br>
+        Date Joined: {{.DateJoined | showDateTime }}
+        </td>
+        <td>
+        Date Created: {{.DateCreated | showDateTime}} {{if (or $.IsAdmin (eq .UserID $.UserID))}}<a href="/edit-message/{{.MessageID}}">Edit</a> 
+        <form style="display:inline;" action="/delete" method="POST">
+        <input type="hidden" value="{{.MessageID}}" name="messageID">
+        <input type="hidden" value="{{.UserID}}" name="user_id">
+        <input type="submit" value="Delete" class="notAButton">
+        </form>{{end}}<br>
+        {{.Message | boldItalics}}<br>
+        {{ if .Edited}}
+        Date Edited: {{.DateEdited | showDateTime}}<br>
+        {{ end }}
+        </td>
+      </tr>
+    {{end}}
+    </table>
+    {{if not (eq .CurrentPage 1)}}<a href="/advanced-search?{{.Query | unescape }}&p={{minus .CurrentPage 1}}">Previous</a> {{end}}
+    <a href="/advanced-search?{{.Query | unescape }}&p=1">1</a>
+    {{if not (eq .PageCount 1)}} <a href="/advanced-search?{{.Query | unescape }}&p={{.PageCount}}">{{.PageCount}}</a>{{end}}
+    {{if not (eq .CurrentPage .PageCount)}} <a href="/advanced-search?{{.Query | unescape }}&p={{add .CurrentPage 1}}">Next</a>{{end}}
+  {{ end }}
+    </div>
+  </div>
+</body>
+<script>
+  inputs = 1;
+  options = ["date_created", "date_edited", "first_name", "username", "last_name"];
+  comparison = ["<=", ">=", "="];
+  
+  function addInput(){
+    var select0 = "";
+    if(inputs != 1){
+      select0 = '<select name="andor' + inputs + '">';
+      select0 += '<option value="OR">OR</option>';
+      select0 += '<option value="AND">AND</option>';
+      select0 += "</select>";
+    }
+    var select1 = "<select name=check" + inputs + ">";
+    for(var i = 0; i < options.length; i++){
+      select1 += '<option value="'+options[i]+'">'+options[i]+'</option>';
+    }
+    select1 += "</select>";
+    var select2 = "<select name=operator" + inputs + ">";
+    for(var i = 0; i < comparison.length; i++){
+      select2 += '<option value="'+comparison[i]+'">'+comparison[i]+'</option>';
+    }
+    select2 += "</select>";
+    value = '<input type="text" name="value'+inputs+'">';
+    var newdiv = document.createElement('div');
+    newdiv.innerHTML = select0+select1+select2+value;
+    document.getElementById("AdvancedSearch").appendChild(newdiv);
+    inputs++;
+  }
+  addInput();
+</script>
+</html>
