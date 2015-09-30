@@ -10,7 +10,6 @@ import (
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
-	"html"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -19,7 +18,6 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -59,15 +57,8 @@ func initTemplates() {
 				return "Unknown"
 			}
 		},
-		"unescape": func(s string) string {
-			s = html.UnescapeString(s)
-			s = strings.Replace(s, "%3C", "<", -1)
-			s = strings.Replace(s, "%3D", "=", -1)
-			s = strings.Replace(s, "%3E", ">", -1)
-			s = strings.Replace(s, "%3c", "<", -1)
-			s = strings.Replace(s, "%3d", "=", -1)
-			s = strings.Replace(s, "%3e", ">", -1)
-			return s
+		"unescape": func(s string) template.URL {
+			return template.URL(s)
 		},
 	}).ParseGlob("./templates/*.tmpl.html"))
 }
