@@ -66,12 +66,12 @@
       select0 += '<option value="AND">AND</option>';
       select0 += "</select>";
     }
-    var select1 = "<select name=check" + inputs + ">";
+    var select1 = '<select id="check' + inputs + '" name="check' + inputs + '" onchange="changeOperators(' + inputs + ')">';
     for(var i = 0; i < options.length; i++){
       select1 += '<option value="'+options[i]+'">'+options[i]+'</option>';
     }
     select1 += "</select>";
-    var select2 = "<select name=operator" + inputs + ">";
+    var select2 = '<select id="operator' + inputs + '" name="operator' + inputs + '">';
     for(var i = 0; i < comparison.length; i++){
       select2 += '<option value="'+comparison[i]+'">'+comparison[i]+'</option>';
     }
@@ -83,5 +83,15 @@
     inputs++;
   }
   addInput();
+  
+  function changeOperators(i) {
+    var field = document.getElementById('check' + i);
+    var comp = document.getElementById('operator' + i);
+    if (["first_name", "username", "last_name"].indexOf(field.value) != -1) {
+      comp.innerHTML = '<option value="=">=</option>';
+    } else {
+      comp.innerHTML = '<option value="<="><=</option><option value=">=">>=</option><option value="=">=</option>';
+    }
+  }
 </script>
 </html>
