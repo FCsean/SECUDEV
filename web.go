@@ -1216,6 +1216,6 @@ func main() {
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
 	http.Handle("/scripts/", http.StripPrefix("/scripts/", http.FileServer(http.Dir("./scripts"))))
 
-	http.ListenAndServe(":8080", context.ClearHandler(http.DefaultServeMux))
-	// http.ListenAndServeTLS(":10443", "certificate/cert.pem", "certificate/key.pem", context.ClearHandler(http.DefaultServeMux))
+	go http.ListenAndServe(":8080", context.ClearHandler(http.DefaultServeMux))
+	fmt.Println(http.ListenAndServeTLS(":10443", "certificate/cert.pem", "certificate/key.pem", context.ClearHandler(http.DefaultServeMux)))
 }
