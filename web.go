@@ -1194,6 +1194,10 @@ func createDB() error {
 	return err
 }
 
+func redir(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
+}
+
 func main() {
 	createDB()
 	initTemplates()
@@ -1216,6 +1220,6 @@ func main() {
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
 	http.Handle("/scripts/", http.StripPrefix("/scripts/", http.FileServer(http.Dir("./scripts"))))
 
-	go http.ListenAndServe(":8080", context.ClearHandler(http.DefaultServeMux))
-	fmt.Println(http.ListenAndServeTLS(":10443", "certificate/cert.pem", "certificate/key.pem", context.ClearHandler(http.DefaultServeMux)))
+	go http.ListenAndServe(":80", http.HandlerFunc(redir))
+	http.ListenAndServeTLS(":443", "certificate/cert.pem", "certificate/key.pem", context.ClearHandler(http.DefaultServeMux))
 }
