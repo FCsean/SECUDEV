@@ -1362,7 +1362,11 @@ func ipnHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func redir(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
+	if r.URL.Path == "/ipn" {
+		ipnHandler(w, r)
+	} else {
+		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
+	}
 }
 
 func main() {
