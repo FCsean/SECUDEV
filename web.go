@@ -715,6 +715,99 @@ func backUpMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func storePageHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isLoggedIn(r) {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		data := struct {
+			IsAdmin bool
+			Items   []Item
+		}{
+			isAdmin(r),
+			getStoreItems(),
+		}
+		renderPage(w, "store", data)
+	case "POST":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		backUpMessages()
+		http.Redirect(w, r, "/backup", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func viewItemHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isLoggedIn(r) {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		itemID, err := strconv.Atoi(r.URL.Path[len("/view-item/"):])
+		if err != nil {
+			http.Error(w, "No such item", http.StatusBadRequest)
+			return
+		}
+		item, err := getStoreItem(itemID)
+		if err != nil {
+			http.Error(w, "No such item", http.StatusBadRequest)
+			return
+		}
+		renderPage(w, "view-item", item)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func addItemHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		renderPage(w, "add-item", nil)
+	case "POST":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		name := r.FormValue("name")
+		description := r.FormValue("description")
+		image := r.FormValue("image")
+		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
+		if err != nil {
+			http.Error(w, "Price should be a decimal", http.StatusBadRequest)
+			return
+		}
+
+		db, err := sql.Open("sqlite3", DatabaseURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer db.Close()
+
+		_, err = db.Exec("INSERT INTO items (name, description, image, price) VALUES (?, ?, ?, ?)",
+			name, description, image, price)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Redirect(w, r, "/store", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
 type UserProfile struct {
 	FirstName  string
 	LastName   string
@@ -734,6 +827,14 @@ type Message struct {
 	MessageID   int
 	DateEdited  time.Time
 	Edited      bool
+}
+
+type Item struct {
+	Name        string
+	Description string
+	Image       string
+	Price       float64
+	ID          int
 }
 
 var maleSalutations = stringSet(
@@ -1134,6 +1235,45 @@ func getAllMessages() *sql.Rows {
 	return rows
 }
 
+func getStoreItems() (items []Item) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT id, name, description, image, price " +
+		"FROM items ")
+
+	if err != nil {
+		return
+	}
+
+	for rows.Next() {
+		var item Item
+		rows.Scan(&item.ID, &item.Name, &item.Description, &item.Image, &item.Price)
+		items = append(items, item)
+	}
+	return
+}
+
+func getStoreItem(itemID int) (item Item, err error) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	err = db.QueryRow("SELECT id, name, description, image, price "+
+		"FROM items WHERE id = ?", itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Image, &item.Price)
+
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 func createDB() error {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
@@ -1189,9 +1329,36 @@ func createDB() error {
 		return err
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+			
+			name VARCHAR(200) NOT NULL,
+      description VARCHAR(200) NOT NULL,
+      image VARCHAR(200),
+      price DECIMAL NOT NULL
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
 	_, err = register("admin", "admin", true, UserProfile{"Admin", "Admin", "M", "Mr", time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC), "Admin"})
 
 	return err
+}
+
+func ipnHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		r.ParseForm()
+		for k, v := range r.PostForm {
+			fmt.Println("Key: ", k)
+			fmt.Println("Value: ", v)
+		}
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
 }
 
 func redir(w http.ResponseWriter, r *http.Request) {
@@ -1199,7 +1366,7 @@ func redir(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	createDB()
+	fmt.Println(createDB())
 	initTemplates()
 
 	http.HandleFunc("/", homePage)
@@ -1216,6 +1383,11 @@ func main() {
 	http.HandleFunc("/download/", downloadFilesHandler)
 	http.HandleFunc("/search", searchHandler)
 	http.HandleFunc("/advanced-search", advancedSearchHandler)
+	http.HandleFunc("/store", storePageHandler)
+	http.HandleFunc("/add-item", addItemHandler)
+	http.HandleFunc("/view-item/", viewItemHandler)
+	http.HandleFunc("/ipn", ipnHandler)
+
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
 	http.Handle("/scripts/", http.StripPrefix("/scripts/", http.FileServer(http.Dir("./scripts"))))

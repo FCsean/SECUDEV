@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <title>Add Item Page</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <style>
+    label{
+      display:block;
+    }
+    input{
+      display:block;
+    }
+    
+  </style>
+  <div class="headerBlue">
+    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>Add Item Page</h2>
+      <form method="POST" action="/add-item">
+        <label>Name: </label><input type="text" name="name">
+        <label>Description: </label><textarea name="description" placeholder="Description here..."></textarea>
+        <label>Image URL: </label><input type="text" name="image">
+        <label>Price: </label><input type="text" name="price">
+        <input type="submit" value="Add Item">
+      </form>
+      <br>
+      <a href="/">Back to personal details</a>
+    </div>
+  </div>
+</body>
+</html>

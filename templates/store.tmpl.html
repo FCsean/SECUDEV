@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <title>Store Page</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <style>
+    img{
+      max-height: 150px;
+      max-width: 150px;
+      display: block;
+    }
+  </style>
+  <div class="headerBlue">
+    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>Store Page</h2>
+      {{if .IsAdmin}}
+      <a href="add-item">Add Item</a><br>
+      {{end}}
+      <a href="/">Back to personal details</a><br>
+      <div>
+      {{range .Items}}
+      <div style="display:inline-block;">
+      <a href="/view-item/{{.ID}}"><b>{{.Name}}</b></a><br>
+      <img src="{{.Image}}">
+      {{.Price}}<br>
+      Add to card button<br>
+      </div>
+      {{end}}
+      </div>
+    </div>
+  </div>
+</body>
+</html>

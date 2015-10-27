@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+  <title>{{.Name}}</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <style>
+    img{
+      max-height: 500px;
+      max-width: 500px;
+      display: block;
+    }
+  </style>
+  <div class="headerBlue">
+    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>{{.Name}}</h2>
+      <a href="/">Back to personal details</a><br>
+      <a href="/store">Back to store</a><br>
+      <b>{{.Name}}</b><br>
+      <img src="{{.Image}}">
+      {{.Description}}<br>
+      {{.Price}}<br>
+
+    </div>
+  </div>
+</body>
+</html>
