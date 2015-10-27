@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+  <title>View Cart Page</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <style>
+  </style>
+  <div class="headerBlue">
+    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>View Cart Page</h2>
+      <a href="/">Back to personal details</a><br>
+      <a href="/store">Back to Store</a><br>
+
+      {{range .Items}}
+      <form action="/update-cart" method="POST">
+        <input type="hidden" name="cart_id" value="{{$.CartID}}">
+        <input type="hidden" name="item_id" value="{{.ID}}">
+        {{.Name}} - {{.Price}} - 
+        <input type="text" name="count" value="{{.Count}}">
+         - {{.Total}}
+        {{if $.Pay}}<input type="submit" value="Update">{{end}}
+      </form>
+      {{end}}
+      Total: {{.Total}}
+      {{if .Pay}}
+      <form name="_xclick" action="https://www.sandbox.paypal.com/cgi-bin/webscr" method="post">
+      <input type="hidden" name="custom" value="buy,{{.UserID}},{{.CartID}}">
+      <input type="hidden" name="cmd" value="_xclick">
+      <input type="hidden" name="business" value="frzsk-seller@yahoo.com">
+      <input type="hidden" name="currency_code" value="USD">
+      <input type="hidden" name="item_name" value="Total">
+      <input type="hidden" name="amount" value="{{.Total}}">
+      <input type="image" src="http://www.paypal.com/en_GB/i/btn/x-click-but01.gif" border="0" name="submit" alt="Make payments with PayPal - it's fast, free and secure!">
+      </form>
+      {{end}}
+    </div>
+  </div>
+</body>
+</html>

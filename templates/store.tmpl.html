@@ -4,7 +4,7 @@
   <link rel="stylesheet" type="text/css" href="/styles/style.css">
 <body>
   <style>
-    img{
+    .image{
       max-height: 150px;
       max-width: 150px;
       display: block;
@@ -24,14 +24,30 @@
       {{if .IsAdmin}}
       <a href="add-item">Add Item</a><br>
       {{end}}
+      <a href="view-cart">View Cart</a><br>
+      <a href="view-transactions">View Transactions</a><br>
       <a href="/">Back to personal details</a><br>
+      <a href="/store">Back to Store</a><br>
+      <h3>Donations</h3>
+      $5
+      <form action="https://www.sandbox.paypal.com/cgi-bin/webscr" method="post" target="_top">
+      <input type="hidden" name="custom" value="donate,1">
+      <input type="hidden" name="cmd" value="_s-xclick">
+      <input type="hidden" name="hosted_button_id" value="CW3RBFQXUEPXL">
+      <input type="image" src="https://www.sandbox.paypal.com/en_US/i/btn/btn_donate_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!">
+      <img alt="" border="0" src="https://www.sandbox.paypal.com/en_US/i/scr/pixel.gif" width="1" height="1">
+      </form>
+
       <div>
       {{range .Items}}
       <div style="display:inline-block;">
       <a href="/view-item/{{.ID}}"><b>{{.Name}}</b></a><br>
-      <img src="{{.Image}}">
+      <img src="{{.Image}}" class="image">
       {{.Price}}<br>
-      Add to card button<br>
+      <form action="/add-cart" method="POST">
+      <input type="hidden" name="item_id" value="{{.ID}}">
+      <input type="submit" value="Add to Cart">
+      </form>
       </div>
       {{end}}
       </div>

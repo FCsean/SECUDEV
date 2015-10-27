@@ -18,6 +18,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -787,6 +788,30 @@ func addItemHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Price should be a decimal", http.StatusBadRequest)
 			return
 		}
+		err = addItem(name, description, image, price)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Redirect(w, r, "/store", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func addToCartHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		if !isLoggedIn(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		userID, _ := getUserID(r)
+		itemID, err := strconv.Atoi(r.FormValue("item_id"))
+		if err != nil {
+			http.Error(w, "Not an Item", http.StatusBadRequest)
+			return
+		}
 
 		db, err := sql.Open("sqlite3", DatabaseURL)
 		if err != nil {
@@ -795,14 +820,156 @@ func addItemHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		defer db.Close()
 
-		_, err = db.Exec("INSERT INTO items (name, description, image, price) VALUES (?, ?, ?, ?)",
-			name, description, image, price)
+		var count int
+		err = db.QueryRow("SELECT COUNT(*) FROM items WHERE id = ?", itemID).Scan(&count)
 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		if count == 0 {
+			http.Error(w, "Not an Item", http.StatusBadRequest)
+			return
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var cartID int
+		err = tx.QueryRow("SELECT id FROM carts WHERE account_id = ? AND payed = ? ORDER BY id DESC ", userID, false).Scan(&cartID)
+		if err != nil {
+			tx.Rollback()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		_, err = tx.Exec("INSERT INTO itemsInACart (cart_id, item_id, count) VALUES (?, ?, ?)", cartID, itemID, 1)
+		if err != nil {
+			tx.Rollback()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		tx.Commit()
+
 		http.Redirect(w, r, "/store", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func viewCartHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isLoggedIn(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		userID, _ := getUserID(r)
+		cart, total, cartID := getCart(userID)
+
+		data := struct {
+			Total  float64
+			Items  []CartItem
+			CartID int
+			UserID int
+			Pay    bool
+		}{
+			total,
+			cart,
+			cartID,
+			userID,
+			true,
+		}
+		renderPage(w, "view-cart", data)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func viewSpecificCartHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isLoggedIn(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		cartID, err := strconv.Atoi(r.URL.Path[len("/view-cart/"):])
+		if err != nil {
+			http.Error(w, "Wrong cart id", http.StatusBadRequest)
+			return
+		}
+		userID, _ := getUserID(r)
+		cart, total, userID2 := getCartWithCartID(cartID)
+		if userID != userID2 {
+			http.Error(w, "Unauthorized access.", http.StatusBadRequest)
+			return
+		}
+		data := struct {
+			Total  float64
+			Items  []CartItem
+			Pay    bool
+			CartID int
+		}{
+			total,
+			cart,
+			false,
+			cartID,
+		}
+		renderPage(w, "view-cart", data)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func viewTransactionsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isLoggedIn(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		userID, _ := getUserID(r)
+
+		data := struct {
+			Transactions []Cart
+		}{
+			getTransactions(userID),
+		}
+		renderPage(w, "view-transactions", data)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func updateItemCountHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		cartID, err := strconv.Atoi(r.FormValue("cart_id"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		itemID, err := strconv.Atoi(r.FormValue("item_id"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		count, err := strconv.Atoi(r.FormValue("count"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if count == 0 {
+			deleteItemFromCart(cartID, itemID)
+		} else {
+			updateItemCount(cartID, itemID, count)
+		}
+		http.Redirect(w, r, "/view-cart", http.StatusFound)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
 	}
@@ -835,6 +1002,19 @@ type Item struct {
 	Image       string
 	Price       float64
 	ID          int
+}
+
+type CartItem struct {
+	ID    int
+	Name  string
+	Price float64
+	Count int
+	Total float64
+}
+
+type Cart struct {
+	ID    int
+	Total float64
 }
 
 var maleSalutations = stringSet(
@@ -1032,6 +1212,13 @@ func register(username, password string, admin bool, profile UserProfile) (int, 
 		"gender, salutation, birthday, about) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		userID, profile.FirstName, profile.LastName, profile.Gender,
 		profile.Salutation, profile.Birthday, profile.About)
+	if err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+
+	result, err = tx.Exec("INSERT INTO carts (account_id, payed) VALUES (?, ?)",
+		userID, false)
 	if err != nil {
 		tx.Rollback()
 		return 0, err
@@ -1264,7 +1451,7 @@ func getStoreItem(itemID int) (item Item, err error) {
 	}
 	defer db.Close()
 
-	err = db.QueryRow("SELECT id, name, description, image, price "+
+	err = db.QueryRow("SELECT id, name, count, total, price "+
 		"FROM items WHERE id = ?", itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Image, &item.Price)
 
 	if err != nil {
@@ -1272,6 +1459,127 @@ func getStoreItem(itemID int) (item Item, err error) {
 	}
 
 	return
+}
+
+func getCartWithCartID(cartID int) (cart []CartItem, total float64, userID int) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT account_id, item_id, name, price, count "+
+		"FROM carts, itemsInACart, items WHERE carts.id = cart_id AND carts.id = ? AND item_id = items.ID", cartID)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	for rows.Next() {
+		var item CartItem
+		rows.Scan(&userID, &item.ID, &item.Name, &item.Price, &item.Count)
+		item.Total = item.Price * float64(item.Count)
+		cart = append(cart, item)
+	}
+
+	for _, item := range cart {
+		total = total + item.Total
+	}
+	return
+}
+
+func getCart(userID int) (cart []CartItem, total float64, cartID int) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	err = db.QueryRow("SELECT id FROM carts WHERE account_id = ? AND payed = ? ORDER BY id DESC ", userID, false).Scan(&cartID)
+	if err != nil {
+		return
+	}
+	rows, err := db.Query("SELECT item_id, name, price, count "+
+		"FROM carts, itemsInACart, items WHERE carts.id = cart_id AND carts.id = ? AND item_id = items.ID", cartID)
+
+	if err != nil {
+
+		fmt.Println(err.Error())
+		return
+	}
+
+	for rows.Next() {
+		var item CartItem
+		rows.Scan(&item.ID, &item.Name, &item.Price, &item.Count)
+		item.Total = item.Price * float64(item.Count)
+		cart = append(cart, item)
+	}
+
+	for _, item := range cart {
+		total = total + item.Total
+	}
+	return
+}
+
+func addItem(name, description, image string, price float64) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("INSERT INTO items (name, description, image, price) VALUES (?, ?, ?, ?)",
+		name, description, image, price)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getTransactions(userID int) (carts []Cart) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT id, total FROM carts WHERE account_id = ? AND payed = ?", userID, true)
+	if err != nil {
+		return
+	}
+
+	for rows.Next() {
+		var cart Cart
+		rows.Scan(&cart.ID, &cart.Total)
+		carts = append(carts, cart)
+	}
+	return carts
+}
+
+func updateItemCount(cartID, itemID, count int) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	//check if payed or not for both delete and update
+	_, err = db.Exec("UPDATE itemsInACart SET count = ? WHERE cart_id = ? AND item_id = ?", count, cartID, itemID)
+
+	return err
+}
+
+func deleteItemFromCart(cartID, itemID int) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("DELETE FROM itemsInACart WHERE cart_id = ? AND item_id = ?", cartID, itemID)
+
+	return err
 }
 
 func createDB() error {
@@ -1343,7 +1651,40 @@ func createDB() error {
 		return err
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE carts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+			account_id INTEGER,
+      
+      total DECIMAL,
+			payed BOOLEAN,
+			
+			FOREIGN KEY(account_id) REFERENCES user_account(id)
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE itemsInACart (
+      cart_id INTEGER,
+      item_id INTEGER,
+      
+      count INTEGER,
+			
+      PRIMARY KEY(cart_id, item_id),
+      FOREIGN KEY(item_id) REFERENCES items(id)
+    )
+	`)
+	if err != nil {
+		return err
+	}
+
 	_, err = register("admin", "admin", true, UserProfile{"Admin", "Admin", "M", "Mr", time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC), "Admin"})
+	addItem("Donate $5", "Donate $5", "https://www.paypalobjects.com/webstatic/en_US/btn/btn_donate_92x26.png", 5.00)
+	addItem("Donate $10", "Donate $10", "https://www.paypalobjects.com/webstatic/en_US/btn/btn_donate_92x26.png", 10.00)
+	addItem("Donate $20", "Donate $20", "https://www.paypalobjects.com/webstatic/en_US/btn/btn_donate_92x26.png", 20.00)
 
 	return err
 }
@@ -1356,9 +1697,101 @@ func ipnHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("Key: ", k)
 			fmt.Println("Value: ", v)
 		}
+		if r.FormValue("payment_status") != "Completed" {
+			return
+		}
+		params := strings.Split(r.FormValue("custom"), ",")
+		switch params[0] {
+		case "donate":
+			userID, _ := strconv.Atoi(params[1])
+			donation, _ := strconv.ParseFloat(r.FormValue("payment_gross"), 64)
+			fmt.Println(addDonation(userID, donation))
+		case "buy":
+			userID, _ := strconv.Atoi(params[1])
+			cartID, _ := strconv.Atoi(params[2])
+			bought, _ := strconv.ParseFloat(r.FormValue("payment_gross"), 64)
+			addBought(userID, cartID, bought)
+		}
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
 	}
+}
+
+func addBought(userID, cartID int, bought float64) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, total, _ := getCartWithCartID(cartID)
+
+	if bought != total {
+		return errors.New("Not the same with total")
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("INSERT INTO carts (account_id, payed) VALUES (?, ?)", userID, false)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE carts SET payed = ?, total = ? WHERE id = ?", true, total, cartID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	tx.Commit()
+	return nil
+}
+
+func addDonation(userID int, donation float64) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	result, err := tx.Exec("INSERT INTO carts (account_id, payed, total) VALUES (?, ?, ?)", userID, true, donation)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	cartID, err := result.LastInsertId()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	var itemID int
+	switch donation {
+	case 5:
+		itemID = 1
+	case 10:
+		itemID = 2
+	case 20:
+		itemID = 3
+	default:
+		tx.Rollback()
+		return errors.New("No such donation value.")
+	}
+	result, err = tx.Exec("INSERT INTO itemsInACart (cart_id, item_id, count) VALUES (?, ?, ?)", cartID, itemID, 1)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	tx.Commit()
+	return nil
 }
 
 func redir(w http.ResponseWriter, r *http.Request) {
@@ -1391,6 +1824,11 @@ func main() {
 	http.HandleFunc("/add-item", addItemHandler)
 	http.HandleFunc("/view-item/", viewItemHandler)
 	http.HandleFunc("/ipn", ipnHandler)
+	http.HandleFunc("/add-cart", addToCartHandler)
+	http.HandleFunc("/view-cart", viewCartHandler)
+	http.HandleFunc("/view-cart/", viewSpecificCartHandler)
+	http.HandleFunc("/view-transactions", viewTransactionsHandler)
+	http.HandleFunc("/update-cart", updateItemCountHandler)
 
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
