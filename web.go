@@ -1099,15 +1099,25 @@ func successHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		paymentID := r.FormValue("paymentId")
 		payerID := r.FormValue("PayerID")
-		req, err := http.NewRequest("POST", "https://api.sandbox.paypal.com/v1/payments/payment/"+paymentID+"/execute/", strings.NewReader(`{"payer_id":"`+payerID+`"}`))
-		req.Header.Add("Content-Type", "application/json")
-		req.Header.Add("Authorization", "Bearer "+accessToken+"")
-		_, err = client.Do(req)
+		err = updateCartStatusPaid(paymentID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		err = errors.New("error")
+		for err != nil {
+			var req *http.Request
+			req, err = http.NewRequest("POST", "https://api.sandbox.paypal.com/v1/payments/payment/"+paymentID+"/execute/", strings.NewReader(`{"payer_id":"`+payerID+`"}`))
+			req.Header.Add("Content-Type", "application/json")
+			req.Header.Add("Authorization", "Bearer "+accessToken+"")
+			_, err = client.Do(req)
+		}
 		if err != nil {
 			http.Error(w, "Paypal dead", http.StatusBadRequest)
 			return
 		}
-		updateCartStatusPaid(paymentID)
+
 		http.Redirect(w, r, "/view-transactions", http.StatusFound)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
@@ -1118,7 +1128,7 @@ func cancelHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		token := r.FormValue("token")
-		updateCartStatus(token, None)
+		updateCartStatusCancelled(token, None)
 		http.Redirect(w, r, "/view-cart", http.StatusFound)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
@@ -1787,14 +1797,14 @@ func updateCartWithPaymentID(cartID int, paymentID string, url string) error {
 	return err
 }
 
-func updateCartStatus(token string, status int) error {
+func updateCartStatusCancelled(token string, status int) error {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	_, err = db.Exec("UPDATE carts SET status = ? WHERE status != ? AND url LIKE ?", Paid, status, "%"+token)
+	_, err = db.Exec("UPDATE carts SET status = ?, payment_id = null, url = '' WHERE status != ? AND url LIKE ?", status, Paid, "%"+token)
 
 	return err
 }
@@ -1825,10 +1835,21 @@ func updateCartStatusPaid(paymentID string) error {
 		return err
 	}
 
-	_, err = tx.Exec("UPDATE carts SET status = ?, total = ? WHERE payment_id = ?", Paid, total, paymentID)
+	res, err := tx.Exec("UPDATE carts SET status = ?, total = ? WHERE payment_id = ?", Paid, total, paymentID)
 	if err != nil {
 		tx.Rollback()
 		return err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if rowsAffected == 0 {
+		tx.Rollback()
+		return errors.New("No such payment id. Cart was edited while paying.")
 	}
 
 	tx.Commit()
