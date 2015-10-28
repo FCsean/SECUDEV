@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"database/sql"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gorilla/context"
@@ -30,6 +31,12 @@ var templates *template.Template
 
 const messagesPerPage = 10
 const backUpDirectory = "backups\\"
+
+const (
+	Paid       = 0
+	None       = 1
+	CheckedOut = 2
+)
 
 func initTemplates() {
 	templates = template.Must(template.New("").Funcs(template.FuncMap{
@@ -840,17 +847,17 @@ func addToCartHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var cartID int
-		err = tx.QueryRow("SELECT id FROM carts WHERE account_id = ? AND payed = ? ORDER BY id DESC ", userID, false).Scan(&cartID)
+		err = tx.QueryRow("SELECT id FROM carts WHERE account_id = ? AND status = ? ORDER BY id DESC ", userID, None).Scan(&cartID)
 		if err != nil {
 			tx.Rollback()
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "Current Cart is checked out", http.StatusBadRequest)
 			return
 		}
 
 		_, err = tx.Exec("INSERT INTO itemsInACart (cart_id, item_id, count) VALUES (?, ?, ?)", cartID, itemID, 1)
 		if err != nil {
 			tx.Rollback()
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "Duplicate item in cart.", http.StatusBadRequest)
 			return
 		}
 
@@ -870,20 +877,29 @@ func viewCartHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		userID, _ := getUserID(r)
-		cart, total, cartID := getCart(userID)
-
+		cart, total, cartID, status, url := getCart(userID)
+		var token string
+		if status == 2 {
+			token = url[len("https://www.sandbox.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token="):]
+		}
 		data := struct {
 			Total  float64
 			Items  []CartItem
 			CartID int
 			UserID int
 			Pay    bool
+			URL    string
+			Status int
+			Token  string
 		}{
 			total,
 			cart,
 			cartID,
 			userID,
-			true,
+			true && status == None,
+			url,
+			status,
+			token,
 		}
 		renderPage(w, "view-cart", data)
 	default:
@@ -959,16 +975,150 @@ func updateItemCountHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		userID, _ := getUserID(r)
 		count, err := strconv.Atoi(r.FormValue("count"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if count == 0 {
-			deleteItemFromCart(cartID, itemID)
+			deleteItemFromCart(cartID, itemID, userID)
 		} else {
-			updateItemCount(cartID, itemID, count)
+			updateItemCount(cartID, itemID, count, userID)
 		}
+		http.Redirect(w, r, "/view-cart", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func getAccessToken() (string, error) {
+	duration, _ := time.ParseDuration("0s")
+	client := &http.Client{
+		Timeout: duration,
+	}
+	req, err := http.NewRequest("POST", "https://api.sandbox.paypal.com/v1/oauth2/token", strings.NewReader("grant_type=client_credentials"))
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Accept-Language", "en_US")
+	req.Header.Add("content-type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("ARSY2kxA9yYYb2wwe5bOHgWtrLfrN86ft6X4tRjWfPA-KaBIKud-Haj2FuirRzWfHaWUmGyCQp_XE_XN", "EKhrhqlNnRM4DmOfldIC57RfDH8djuaPi-Qv1RYD98mlXR7qt-MrzL6Xs1nn7ciTzJgR9PhByo9fOlWF")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", errors.New("Paypal dead")
+	}
+	var resBody map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&resBody)
+	accessToken := resBody["access_token"].(string)
+	return accessToken, nil
+}
+
+func payHandler(w http.ResponseWriter, r *http.Request) {
+	if !isLoggedIn(r) {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	switch r.Method {
+	case "POST":
+		duration, _ := time.ParseDuration("0s")
+		client := &http.Client{
+			Timeout: duration,
+		}
+
+		userID, _ := getUserID(r)
+		cart, total, cartID, _, _ := getCart(userID)
+
+		if len(cart) == 0 {
+			http.Error(w, "No items in cart", http.StatusBadRequest)
+		}
+
+		accessToken, err := getAccessToken()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		items := ""
+		for i, v := range cart {
+			if i != len(cart)-1 {
+				items = items + `{"quantity":"` + fmt.Sprintf("%v", v.Count) + `", "name":"` + v.Name + `", "price":"` + fmt.Sprintf("%v", v.Price) + `", "currency":"USD"},`
+			} else {
+				items = items + `{"quantity":"` + fmt.Sprintf("%v", v.Count) + `", "name":"` + v.Name + `", "price":"` + fmt.Sprintf("%v", v.Price) + `", "currency":"USD"}`
+			}
+		}
+		items = `"item_list": { "items":[` + items + `] }`
+		req, err := http.NewRequest("POST", "https://api.sandbox.paypal.com/v1/payments/payment",
+			strings.NewReader(`{
+      "intent":"sale",
+      "redirect_urls":{
+        "return_url":"http://`+r.Host+`/success",
+        "cancel_url":"http://`+r.Host+`/cancel"
+      },
+      "payer":{
+        "payment_method":"paypal"
+      },
+      "transactions":[
+        {
+          "amount":{
+            "total":"`+fmt.Sprintf("%v", total)+`",
+            "currency":"USD"
+          },
+          "description":"This is the payment transaction description.",`+items+
+				`
+        }
+      ]
+    }`))
+		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Authorization", "Bearer "+accessToken+"")
+		resp, err := client.Do(req)
+		if err != nil {
+			http.Error(w, "Paypal dead", http.StatusBadRequest)
+			return
+		}
+		var resBody map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&resBody)
+		id := resBody["id"].(string)
+		url := resBody["links"].([]interface{})[1].(map[string]interface{})["href"].(string)
+		updateCartWithPaymentID(cartID, id, url)
+		http.Redirect(w, r, url, http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func successHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		accessToken, err := getAccessToken()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		duration, _ := time.ParseDuration("0s")
+		client := &http.Client{
+			Timeout: duration,
+		}
+		paymentID := r.FormValue("paymentId")
+		payerID := r.FormValue("PayerID")
+		req, err := http.NewRequest("POST", "https://api.sandbox.paypal.com/v1/payments/payment/"+paymentID+"/execute/", strings.NewReader(`{"payer_id":"`+payerID+`"}`))
+		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Authorization", "Bearer "+accessToken+"")
+		_, err = client.Do(req)
+		if err != nil {
+			http.Error(w, "Paypal dead", http.StatusBadRequest)
+			return
+		}
+		updateCartStatusPaid(paymentID)
+		http.Redirect(w, r, "/view-transactions", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func cancelHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		token := r.FormValue("token")
+		updateCartStatus(token, None)
 		http.Redirect(w, r, "/view-cart", http.StatusFound)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
@@ -1217,8 +1367,8 @@ func register(username, password string, admin bool, profile UserProfile) (int, 
 		return 0, err
 	}
 
-	result, err = tx.Exec("INSERT INTO carts (account_id, payed) VALUES (?, ?)",
-		userID, false)
+	result, err = tx.Exec("INSERT INTO carts (account_id, status) VALUES (?, ?)",
+		userID, None)
 	if err != nil {
 		tx.Rollback()
 		return 0, err
@@ -1480,23 +1630,21 @@ func getCartWithCartID(cartID int) (cart []CartItem, total float64, userID int) 
 		var item CartItem
 		rows.Scan(&userID, &item.ID, &item.Name, &item.Price, &item.Count)
 		item.Total = item.Price * float64(item.Count)
+		total = total + item.Total
 		cart = append(cart, item)
 	}
 
-	for _, item := range cart {
-		total = total + item.Total
-	}
 	return
 }
 
-func getCart(userID int) (cart []CartItem, total float64, cartID int) {
+func getCart(userID int) (cart []CartItem, total float64, cartID int, status int, url string) {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
 		return
 	}
 	defer db.Close()
 
-	err = db.QueryRow("SELECT id FROM carts WHERE account_id = ? AND payed = ? ORDER BY id DESC ", userID, false).Scan(&cartID)
+	err = db.QueryRow("SELECT id, status, url FROM carts WHERE account_id = ? AND status != ? ORDER BY id DESC ", userID, Paid).Scan(&cartID, &status, &url)
 	if err != nil {
 		return
 	}
@@ -1513,12 +1661,10 @@ func getCart(userID int) (cart []CartItem, total float64, cartID int) {
 		var item CartItem
 		rows.Scan(&item.ID, &item.Name, &item.Price, &item.Count)
 		item.Total = item.Price * float64(item.Count)
+		total = total + item.Total
 		cart = append(cart, item)
 	}
 
-	for _, item := range cart {
-		total = total + item.Total
-	}
 	return
 }
 
@@ -1545,7 +1691,7 @@ func getTransactions(userID int) (carts []Cart) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, total FROM carts WHERE account_id = ? AND payed = ?", userID, true)
+	rows, err := db.Query("SELECT id, total FROM carts WHERE account_id = ? AND status = ?", userID, Paid)
 	if err != nil {
 		return
 	}
@@ -1558,28 +1704,135 @@ func getTransactions(userID int) (carts []Cart) {
 	return carts
 }
 
-func updateItemCount(cartID, itemID, count int) error {
+func updateItemCount(cartID, itemID, count, userID int) error {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 	//check if payed or not for both delete and update
-	_, err = db.Exec("UPDATE itemsInACart SET count = ? WHERE cart_id = ? AND item_id = ?", count, cartID, itemID)
 
-	return err
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	var cartCount int
+
+	err = tx.QueryRow("SELECT COUNT(*) FROM itemsInACart, carts WHERE carts.id = cart_id AND cart_id = ? AND item_id = ? AND status = ? AND account_id = ?", cartID, itemID, None, userID).Scan(&cartCount)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if cartCount == 0 {
+		tx.Rollback()
+		return errors.New("Not owner or status payed or checkedout")
+	}
+
+	_, err = tx.Exec("UPDATE itemsInACart SET count = ? WHERE cart_id = ? AND item_id = ?", count, cartID, itemID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	tx.Commit()
+	return nil
 }
 
-func deleteItemFromCart(cartID, itemID int) error {
+func deleteItemFromCart(cartID, itemID, userID int) error {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	_, err = db.Exec("DELETE FROM itemsInACart WHERE cart_id = ? AND item_id = ?", cartID, itemID)
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	var cartCount int
+
+	err = tx.QueryRow("SELECT COUNT(*) FROM itemsInACart, carts WHERE carts.id = cart_id AND cart_id = ? AND item_id = ? AND status = ? AND account_id = ?", cartID, itemID, None, userID).Scan(&cartCount)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if cartCount == 0 {
+		tx.Rollback()
+		return errors.New("Not owner or status payed or checkedout")
+	}
+
+	_, err = tx.Exec("DELETE FROM itemsInACart WHERE cart_id = ? AND item_id = ?", cartID, itemID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	tx.Commit()
+	return nil
+}
+
+func updateCartWithPaymentID(cartID int, paymentID string, url string) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("UPDATE carts SET payment_id = ?, status = ?, url = ? WHERE id = ?", paymentID, CheckedOut, url, cartID)
 
 	return err
+}
+
+func updateCartStatus(token string, status int) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("UPDATE carts SET status = ? WHERE status != ? AND url LIKE ?", Paid, status, "%"+token)
+
+	return err
+}
+
+func updateCartStatusPaid(paymentID string) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	var userID int
+	db.QueryRow("SELECT account_id FROM carts WHERE payment_id = ?", paymentID).Scan(&userID)
+	if err != nil {
+		return err
+	}
+
+	_, total, _, _, _ := getCart(userID)
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("INSERT INTO carts (account_id, status) VALUES (?, ?)", userID, None)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE carts SET status = ?, total = ? WHERE payment_id = ?", Paid, total, paymentID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	tx.Commit()
+	return nil
 }
 
 func createDB() error {
@@ -1657,8 +1910,10 @@ func createDB() error {
 			account_id INTEGER,
       
       total DECIMAL,
-			payed BOOLEAN,
-			
+			status INTEGER,
+			payment_id TEXT,
+      url TEXT DEFAULT '',
+      
 			FOREIGN KEY(account_id) REFERENCES user_account(id)
 		)
 	`)
@@ -1829,6 +2084,9 @@ func main() {
 	http.HandleFunc("/view-cart/", viewSpecificCartHandler)
 	http.HandleFunc("/view-transactions", viewTransactionsHandler)
 	http.HandleFunc("/update-cart", updateItemCountHandler)
+	http.HandleFunc("/pay-now", payHandler)
+	http.HandleFunc("/success", successHandler)
+	http.HandleFunc("/cancel", cancelHandler)
 
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
