@@ -49,6 +49,8 @@ func initTemplates() {
 			s = template.HTMLEscapeString(s)
 			imageTags := regexp.MustCompile(`&lt;img\s+src=&#34;(.*?)&#34;&gt;`)
 			s = imageTags.ReplaceAllString(s, `<img src="$1" style="max-width:570px;">`)
+			linkTags := regexp.MustCompile(`&lt;a\s+href=&#34;(.*?)&#34;&gt;(.*?)&lt;/a&gt;`)
+			s = linkTags.ReplaceAllString(s, `<a href="$1">$2</a>`)
 			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre|u|sub|sup|strike|marquee))&gt;")
 			s = unescapeTags.ReplaceAllString(s, "<$1>")
 			s = regexp.MustCompile("\r?\n").ReplaceAllString(s, "<br>")
@@ -760,7 +762,7 @@ func viewItemHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		itemID, err := strconv.Atoi(r.URL.Path[len("/view-item/"):])
 		if err != nil {
-			http.Error(w, "No such item", http.StatusBadRequest)
+			http.Error(w, "Wrong ID", http.StatusBadRequest)
 			return
 		}
 		item, err := getStoreItem(itemID)
@@ -768,7 +770,14 @@ func viewItemHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "No such item", http.StatusBadRequest)
 			return
 		}
-		renderPage(w, "view-item", item)
+		data := struct {
+			IsAdmin bool
+			Item    Item
+		}{
+			isAdmin(r),
+			item,
+		}
+		renderPage(w, "view-item", data)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
 	}
@@ -796,6 +805,61 @@ func addItemHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = addItem(name, description, image, price)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Redirect(w, r, "/store", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
+func editItemHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		itemID, err := strconv.Atoi(r.URL.Path[len("/edit-item/"):])
+		if err != nil {
+			http.Error(w, "Wrong ID", http.StatusBadRequest)
+			return
+		}
+		if itemID < 4 {
+			http.Error(w, "Donations can't be edited", http.StatusBadRequest)
+			return
+		}
+		item, err := getStoreItem(itemID)
+		if err != nil {
+			http.Error(w, "No such item", http.StatusBadRequest)
+			return
+		}
+		renderPage(w, "edit-item", item)
+	case "POST":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		itemID, err := strconv.Atoi(r.FormValue("item_id"))
+		if err != nil {
+			http.Error(w, "Wrong ID", http.StatusBadRequest)
+			return
+		}
+		if itemID < 4 {
+			http.Error(w, "Donations can't be edited", http.StatusBadRequest)
+			return
+		}
+		name := r.FormValue("name")
+		description := r.FormValue("description")
+		image := r.FormValue("image")
+		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
+		if err != nil {
+			http.Error(w, "Price should be a decimal", http.StatusBadRequest)
+			return
+		}
+		err = editItem(itemID, name, description, image, price)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -1135,6 +1199,33 @@ func cancelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func deleteItemHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		itemID, err := strconv.Atoi(r.FormValue("item_id"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if itemID < 4 {
+			http.Error(w, "Donations can't be deleted.", http.StatusBadRequest)
+			return
+		}
+		err = deleteItem(itemID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Redirect(w, r, "/store", http.StatusFound)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
 type UserProfile struct {
 	FirstName  string
 	LastName   string
@@ -1169,6 +1260,7 @@ type CartItem struct {
 	Name  string
 	Price float64
 	Count int
+	Image string
 	Total float64
 }
 
@@ -1611,7 +1703,7 @@ func getStoreItem(itemID int) (item Item, err error) {
 	}
 	defer db.Close()
 
-	err = db.QueryRow("SELECT id, name, count, total, price "+
+	err = db.QueryRow("SELECT id, name, description, image, price "+
 		"FROM items WHERE id = ?", itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Image, &item.Price)
 
 	if err != nil {
@@ -1628,7 +1720,7 @@ func getCartWithCartID(cartID int) (cart []CartItem, total float64, userID int) 
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT account_id, item_id, name, price, count "+
+	rows, err := db.Query("SELECT account_id, item_id, name, price, count, image "+
 		"FROM carts, itemsInACart, items WHERE carts.id = cart_id AND carts.id = ? AND item_id = items.ID", cartID)
 
 	if err != nil {
@@ -1638,7 +1730,7 @@ func getCartWithCartID(cartID int) (cart []CartItem, total float64, userID int) 
 
 	for rows.Next() {
 		var item CartItem
-		rows.Scan(&userID, &item.ID, &item.Name, &item.Price, &item.Count)
+		rows.Scan(&userID, &item.ID, &item.Name, &item.Price, &item.Count, &item.Image)
 		item.Total = item.Price * float64(item.Count)
 		total = total + item.Total
 		cart = append(cart, item)
@@ -1658,7 +1750,7 @@ func getCart(userID int) (cart []CartItem, total float64, cartID int, status int
 	if err != nil {
 		return
 	}
-	rows, err := db.Query("SELECT item_id, name, price, count "+
+	rows, err := db.Query("SELECT item_id, name, price, count, image "+
 		"FROM carts, itemsInACart, items WHERE carts.id = cart_id AND carts.id = ? AND item_id = items.ID", cartID)
 
 	if err != nil {
@@ -1669,7 +1761,7 @@ func getCart(userID int) (cart []CartItem, total float64, cartID int, status int
 
 	for rows.Next() {
 		var item CartItem
-		rows.Scan(&item.ID, &item.Name, &item.Price, &item.Count)
+		rows.Scan(&item.ID, &item.Name, &item.Price, &item.Count, &item.Image)
 		item.Total = item.Price * float64(item.Count)
 		total = total + item.Total
 		cart = append(cart, item)
@@ -1687,6 +1779,22 @@ func addItem(name, description, image string, price float64) error {
 
 	_, err = db.Exec("INSERT INTO items (name, description, image, price) VALUES (?, ?, ?, ?)",
 		name, description, image, price)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func editItem(itemID int, name, description, image string, price float64) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("UPDATE items SET name = ?, description = ?, image = ?, price = ? WHERE id = ?",
+		name, description, image, price, itemID)
 
 	if err != nil {
 		return err
@@ -1854,6 +1962,18 @@ func updateCartStatusPaid(paymentID string) error {
 
 	tx.Commit()
 	return nil
+}
+
+func deleteItem(itemID int) error {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("DELETE FROM items WHERE id = ?", itemID)
+
+	return err
 }
 
 func createDB() error {
@@ -2108,6 +2228,9 @@ func main() {
 	http.HandleFunc("/pay-now", payHandler)
 	http.HandleFunc("/success", successHandler)
 	http.HandleFunc("/cancel", cancelHandler)
+	http.HandleFunc("/delete-item", deleteItemHandler)
+	http.HandleFunc("/edit-item/", editItemHandler)
+	http.HandleFunc("/edit-item", editItemHandler)
 
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))

@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <title>Edit Item Page</title>
+  <link rel="stylesheet" type="text/css" href="/styles/style.css">
+<body>
+  <style>
+    label{
+      display:block;
+    }
+    input{
+      display:block;
+    }
+    
+  </style>
+  <div class="headerBlue">
+    <img class="hexLogo" src="/images/hexagonLogo.png">
+     <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
+     <div class="hexSubText">Department of Defense</div>
+     <div class="logoutText"><form method="POST" action="/logout"><input type="submit" value="Logout"></form></div>
+  </div>
+  <div class="headerRed"></div>
+
+  <div class="pageDiv">
+    <div class="bodyWrapper">
+      <h2>Edit Item Page</h2>
+      <form method="POST" action="/edit-item">
+        <input type="hidden" name="item_id" value="{{.ID}}">
+        <label>Name: </label><input type="text" name="name" value="{{.Name}}">
+        <label>Description: </label><textarea name="description" placeholder="Description here...">{{.Description}}</textarea>
+        <label>Image URL: </label><input type="text" name="image" value="{{.Image}}">
+        <label>Price: </label><input type="text" name="price" value="{{.Price}}">
+        <input type="submit" value="Update">
+      </form>
+      <br>
+      <a href="/">Back to personal details</a><br>
+      <a href="/store">Back to Store</a><br>
+    </div>
+  </div>
+</body>
+</html>

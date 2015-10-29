@@ -1,6 +1,6 @@
 <!doctype html>
 <html>
-  <title>{{.Name}}</title>
+  <title>{{.Item.Name}}</title>
   <link rel="stylesheet" type="text/css" href="/styles/style.css">
 <body>
   <style>
@@ -20,14 +20,16 @@
 
   <div class="pageDiv">
     <div class="bodyWrapper">
-      <h2>{{.Name}}</h2>
+      <h2>{{.Item.Name}}</h2>
       <a href="/">Back to personal details</a><br>
       <a href="/store">Back to store</a><br>
-      <b>{{.Name}}</b><br>
-      <img src="{{.Image}}">
-      {{.Description}}<br>
-      {{.Price}}<br>
-
+      <b>{{.Item.Name}}</b><br>
+      <img src="{{.Item.Image}}">
+      {{.Item.Description}}<br>
+      {{.Item.Price}}<br>
+      {{if .IsAdmin}}
+      <a href="/edit-item/{{.Item.ID}}">Edit Item</a>
+      {{end}}
     </div>
   </div>
 </body>

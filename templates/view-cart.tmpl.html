@@ -23,7 +23,7 @@
       <form action="/update-cart" method="POST">
         <input type="hidden" name="cart_id" value="{{$.CartID}}">
         <input type="hidden" name="item_id" value="{{.ID}}">
-        {{.Name}} - {{.Price}} - 
+        <a href="/view-item/{{.ID}}">{{.Name}}</a> - <img src="{{.Image}}" style="max-height:30px;max-width:30px;"> - {{.Price}} - 
         <input type="text" name="count" value="{{.Count}}">
          - {{.Total}}
         {{if $.Pay}}<input type="submit" value="Update">{{end}}
