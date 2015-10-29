@@ -807,6 +807,10 @@ func addItemHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Price should be a decimal", http.StatusBadRequest)
 			return
 		}
+		if price <= 0 {
+			http.Error(w, "Price should be positive", http.StatusBadRequest)
+			return
+		}
 		err = addItem(name, description, image, price)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -860,6 +864,10 @@ func editItemHandler(w http.ResponseWriter, r *http.Request) {
 		price, err := strconv.ParseFloat(r.FormValue("price"), 64)
 		if err != nil {
 			http.Error(w, "Price should be a decimal", http.StatusBadRequest)
+			return
+		}
+		if price <= 0 {
+			http.Error(w, "Price should be positive", http.StatusBadRequest)
 			return
 		}
 		err = editItem(itemID, name, description, image, price)
@@ -1094,8 +1102,9 @@ func payHandler(w http.ResponseWriter, r *http.Request) {
 		userID, _ := getUserID(r)
 		cart, total, cartID, _, _ := getCart(userID)
 
-		if len(cart) == 0 {
+		if total == 0 {
 			http.Error(w, "No items in cart", http.StatusBadRequest)
+			return
 		}
 
 		accessToken, err := getAccessToken()
@@ -1946,7 +1955,7 @@ func updateCartStatusPaid(paymentID string) error {
 		return err
 	}
 
-	res, err := tx.Exec("UPDATE carts SET status = ?, total = ? WHERE payment_id = ?", Paid, total, paymentID)
+	res, err := tx.Exec("UPDATE carts SET status = ?, total = ?, date_paid = ? WHERE payment_id = ?", Paid, total, time.Now(), paymentID)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -2057,6 +2066,7 @@ func createDB() error {
 			status INTEGER,
 			payment_id TEXT,
       url TEXT DEFAULT '',
+      date_paid DATE,
       
 			FOREIGN KEY(account_id) REFERENCES user_account(id)
 		)
@@ -2163,7 +2173,7 @@ func addDonation(userID int, donation float64) error {
 		return err
 	}
 
-	result, err := tx.Exec("INSERT INTO carts (account_id, status, total) VALUES (?, ?, ?)", userID, Paid, donation)
+	result, err := tx.Exec("INSERT INTO carts (account_id, status, total, date_paid) VALUES (?, ?, ?, ?)", userID, Paid, donation, time.Now())
 	if err != nil {
 		tx.Rollback()
 		return err
