@@ -732,13 +732,16 @@ func storePageHandler(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
+		userID, _ := getUserID(r)
 
 		data := struct {
 			IsAdmin bool
 			Items   []Item
+			UserID  int
 		}{
 			isAdmin(r),
 			getStoreItems(),
+			userID,
 		}
 		renderPage(w, "store", data)
 	case "POST":
