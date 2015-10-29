@@ -1886,22 +1886,22 @@ func getAllTransactions(earlierThan, laterThan string) (carts []Cart) {
 
 	var rows *sql.Rows
 	if len(earlierThan) == 0 && len(laterThan) == 0 {
-		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ?", None)
+		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE carts.account_id = user_account.id AND user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ?", None)
 		if err != nil {
 			return
 		}
 	} else if len(earlierThan) != 0 && len(laterThan) != 0 {
-		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid < ? AND date_paid > ?", None, earlierThan, laterThan)
+		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE carts.account_id = user_account.id AND user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid < ? AND date_paid > ?", None, earlierThan, laterThan)
 		if err != nil {
 			return
 		}
 	} else if len(earlierThan) != 0 {
-		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid < ?", None, earlierThan)
+		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE carts.account_id = user_account.id AND user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid < ?", None, earlierThan)
 		if err != nil {
 			return
 		}
 	} else if len(laterThan) != 0 {
-		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid > ?", None, laterThan)
+		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE carts.account_id = user_account.id AND user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid > ?", None, laterThan)
 		if err != nil {
 			return
 		}
