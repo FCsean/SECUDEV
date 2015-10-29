@@ -149,6 +149,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 			Viewing     bool
 			PageCount   int
 			CurrentPage int
+			Badges      []Badge
 		}{
 			profile,
 			messages,
@@ -157,6 +158,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 			false,
 			int(math.Ceil(float64(messageCount) / float64(messagesPerPage))),
 			int(pageNum),
+			getAllBadges(userID),
 		}
 
 		renderPage(w, "home", data)
@@ -182,10 +184,12 @@ func viewPage(w http.ResponseWriter, r *http.Request) {
 			Profile *UserProfile
 			IsAdmin bool
 			Viewing bool
+			Badges  []Badge
 		}{
 			profile,
 			isAdmin(r),
 			true,
+			getAllBadges(userID),
 		}
 		renderPage(w, "home", data)
 	default:
@@ -239,6 +243,8 @@ func messagePost(w http.ResponseWriter, r *http.Request) {
 
 		tx.Commit()
 
+		checkPostBadges(userID)
+		checkEarnedBadges(userID)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 
 	default:
@@ -903,6 +909,7 @@ func addToCartHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		userID, _ := getUserID(r)
 		itemID, err := strconv.Atoi(r.FormValue("item_id"))
+
 		if err != nil {
 			http.Error(w, "Not an Item", http.StatusBadRequest)
 			return
@@ -2054,6 +2061,9 @@ func updateCartStatusPaid(paymentID string) error {
 	}
 
 	tx.Commit()
+
+	checkBoughtBadges(userID)
+	checkEarnedBadges(userID)
 	return nil
 }
 
@@ -2171,6 +2181,21 @@ func createDB() error {
 		return err
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE earned_badges (
+			account_id INTEGER,
+      
+      description TEXT,
+      badge_id int,
+      
+      PRIMARY KEY(account_id, badge_id),
+			FOREIGN KEY(account_id) REFERENCES user_account(id)
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
 	_, err = register("admin", "admin", true, UserProfile{"Admin", "Admin", "M", "Mr", time.Date(1990, time.January, 1, 0, 0, 0, 0, time.UTC), "Admin"})
 	addItem("Donate $5", "Donate $5", "https://www.paypalobjects.com/webstatic/en_US/btn/btn_donate_92x26.png", 5.00)
 	addItem("Donate $10", "Donate $10", "https://www.paypalobjects.com/webstatic/en_US/btn/btn_donate_92x26.png", 10.00)
@@ -2283,6 +2308,8 @@ func addDonation(userID int, donation float64) error {
 		return err
 	}
 	tx.Commit()
+	checkDonateBadges(userID)
+	checkEarnedBadges(userID)
 	return nil
 }
 
@@ -2292,6 +2319,133 @@ func redir(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
 	}
+}
+
+func checkPostBadges(userID int) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM messages WHERE account_id = ?", userID).Scan(&count)
+
+	if count >= 3 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Participant Badge: >= 3 Posts", 1, userID)
+	}
+	if count >= 5 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Chatter Badge: >= 5 Posts", 2, userID)
+	}
+	if count >= 10 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Socialite Badge : >= 10 Posts", 3, userID)
+	}
+}
+
+func checkDonateBadges(userID int) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	var sum float64
+	err = db.QueryRow("SELECT SUM(price) FROM carts, itemsInACart, items WHERE carts.id = itemsInACart.cart_id AND items.id = itemsInACart.item_id AND account_id = ? AND status = ? AND (items.id = 1 OR items.id = 2 OR items.id = 3)", userID, Paid).Scan(&sum)
+	if err != nil {
+		return
+	}
+
+	if sum >= 5 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Supporter Badge: >= $5 Donations", 4, userID)
+	}
+	if sum >= 20 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Contributor Badge: >= $20 Donations", 5, userID)
+	}
+	if sum >= 100 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Pillar Badge: >= $100 Donations", 6, userID)
+	}
+	return
+}
+
+func checkBoughtBadges(userID int) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	var sum float64
+	err = db.QueryRow("SELECT SUM(price) FROM carts, itemsInACart, items WHERE carts.id = itemsInACart.cart_id AND items.id = itemsInACart.item_id AND account_id = ? AND status = ? AND items.id != 1 AND items.id != 2 AND items.id != 3", userID, Paid).Scan(&sum)
+	if err != nil {
+		return
+	}
+
+	if sum >= 5 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Shopper Badge: >= $5 Bought", 7, userID)
+	}
+	if sum >= 20 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Promoter Badge: >= $20 Bought", 8, userID)
+	}
+	if sum >= 100 {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Elite Badge: >= $100 Bought", 9, userID)
+	}
+	return
+}
+
+func checkEarnedBadges(userID int) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT badge_id FROM earned_badges WHERE account_id = ?", userID)
+	if err != nil {
+		return
+	}
+	var earned [12]bool
+	for i := 0; i < 12; i++ {
+		earned[i] = false
+	}
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		earned[id-1] = true
+	}
+	if earned[0] && earned[3] && earned[6] {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Explorer Badge: at least have Participant, Support and Shopper", 10, userID)
+	}
+	if earned[4] && earned[7] {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Backer Badge: at least have Contributor and Promoter", 11, userID)
+	}
+	if earned[2] && earned[5] && earned[8] {
+		db.Exec("INSERT INTO earned_badges (description, badge_id, account_id) VALUES (?, ?, ?)", "Evangelist Badge: at least have Socialite, Pillar, and Elite", 12, userID)
+	}
+
+}
+
+type Badge struct {
+	Description string
+}
+
+func getAllBadges(userID int) (badges []Badge) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT description FROM earned_badges WHERE account_id = ?", userID)
+	if err != nil {
+		return
+	}
+
+	for rows.Next() {
+		var badge Badge
+		rows.Scan(&badge.Description)
+		badges = append(badges, badge)
+	}
+	return
 }
 
 func main() {

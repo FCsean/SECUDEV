@@ -69,8 +69,8 @@
       <form action="/add-cart" method="POST">
       <input type="hidden" name="item_id" value="{{.ID}}">
       <input type="submit" value="Add to Cart">
-      {{if gt .ID 3 }}
       </form>
+      {{if gt .ID 3 }}
       <form action="/delete-item" method="POST">
       <input type="hidden" name="item_id" value="{{.ID}}">
       <input type="submit" value="Delete">

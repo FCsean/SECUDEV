@@ -26,6 +26,10 @@
       About Me:
       <p>{{.Profile.About}}</p>
       <br>
+      <h3>Earned Badges</h3>
+      {{range .Badges}}
+        {{.Description}}<br>
+      {{end}}
       
       {{if not .Viewing}}
       <a href="/edit"> Edit Profile </a> <br>
