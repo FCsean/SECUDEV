@@ -2113,6 +2113,7 @@ func ipnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// deprecated code
 func addBought(userID, cartID int, bought float64) error {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
@@ -2159,7 +2160,7 @@ func addDonation(userID int, donation float64) error {
 		return err
 	}
 
-	result, err := tx.Exec("INSERT INTO carts (account_id, payed, total) VALUES (?, ?, ?)", userID, true, donation)
+	result, err := tx.Exec("INSERT INTO carts (account_id, status, total) VALUES (?, ?, ?)", userID, Paid, donation)
 	if err != nil {
 		tx.Rollback()
 		return err
