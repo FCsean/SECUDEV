@@ -18,7 +18,10 @@
       <h2>View Cart Page</h2>
       <a href="/">Back to personal details</a><br>
       <a href="/store">Back to Store</a><br>
-
+      
+      Username: {{.Cart.Username}}<br>
+      Name: {{.Cart.FirstName}} {{.Cart.LastName}}<br>
+      Status: {{showStatus .Cart.Status}}
       {{range .Items}}
       <form action="/update-cart" method="POST">
         <input type="hidden" name="cart_id" value="{{$.CartID}}">
@@ -35,7 +38,7 @@
       <input type="submit" src="http://www.paypal.com/en_GB/i/btn/x-click-but01.gif" border="0" name="submit" alt="Make payments with PayPal - it's fast, free and secure!">
       </form>
       {{end}}
-      {{if eq .Status 2}}
+      {{if eq .Cart.Status 2}}
       <br><a href="/cancel?token={{.Token}}">Cancel</a>
       <br><a href="{{.URL}}">Pay Now</a>
       {{end}}

@@ -1,6 +1,6 @@
 <!doctype html>
 <html>
-  <title>View Transactions Page</title>
+  <title>View All Transactions Page</title>
   <link rel="stylesheet" type="text/css" href="/styles/style.css">
 <body>
   <style>
@@ -15,12 +15,17 @@
 
   <div class="pageDiv">
     <div class="bodyWrapper">
-      <h2>View Transactions Page</h2>
+      <h2>View All Transactions Page</h2>
       <a href="/">Back to personal details</a><br>
       <a href="/store">Back to Store</a><br>
-
+      Dates should be in the form of YYYY-MM-DD <br>
+      <form action="/view-all-transactions">
+      Later than: <input type="date" name="lt" value="{{.LT}}">
+      Earlier than: <input type="date" name="et" value="{{.ET}}">
+      <input type="submit" value="Filter">
+      </form>
       {{range .Transactions}}
-        <a href="/view-cart/{{.ID}}">{{.ID}}</a> - {{.Total}} - {{.DatePaid}}<br>
+        <a href="/view-cart/{{.ID}}">{{.ID}}</a> - {{.Username}} - {{.FirstName}} {{.LastName}} - {{showStatus .Status}} - {{.Total}} - {{.DatePaid}}<br>
       {{end}}
       
     </div>

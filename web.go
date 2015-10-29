@@ -67,6 +67,19 @@ func initTemplates() {
 				return "Unknown"
 			}
 		},
+		"showStatus": func(status int) string {
+			switch status {
+			case CheckedOut:
+				return "CheckedOut"
+			case None:
+				return "Cancelled or not yet checkedout"
+			case Paid:
+				return "Paid"
+			default:
+				log.Printf("ERROR: attempted to show unknown status %q\n", status)
+				return "Unknown"
+			}
+		},
 		"unescape": func(s string) template.URL {
 			return template.URL(s)
 		},
@@ -995,8 +1008,8 @@ func viewSpecificCartHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		userID, _ := getUserID(r)
-		cart, total, userID2 := getCartWithCartID(cartID)
-		if userID != userID2 {
+		cart, userID2 := getCartWithCartID(cartID)
+		if userID != userID2 && !isAdmin(r) {
 			http.Error(w, "Unauthorized access.", http.StatusBadRequest)
 			return
 		}
@@ -1005,11 +1018,13 @@ func viewSpecificCartHandler(w http.ResponseWriter, r *http.Request) {
 			Items  []CartItem
 			Pay    bool
 			CartID int
+			Cart   Cart
 		}{
-			total,
-			cart,
+			cart.Total,
+			cart.Items,
 			false,
 			cartID,
+			cart,
 		}
 		renderPage(w, "view-cart", data)
 	default:
@@ -1238,6 +1253,28 @@ func deleteItemHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func viewAllHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		if !isAdmin(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		data := struct {
+			Transactions []Cart
+			ET           string
+			LT           string
+		}{
+			getAllTransactions(r.FormValue("et"), r.FormValue("lt")),
+			r.FormValue("et"),
+			r.FormValue("lt"),
+		}
+		renderPage(w, "view-all-transactions", data)
+	default:
+		errorPage(w, http.StatusMethodNotAllowed)
+	}
+}
+
 type UserProfile struct {
 	FirstName  string
 	LastName   string
@@ -1277,8 +1314,14 @@ type CartItem struct {
 }
 
 type Cart struct {
-	ID    int
-	Total float64
+	Username  string
+	FirstName string
+	LastName  string
+	Items     []CartItem
+	Status    int
+	DatePaid  time.Time
+	ID        int
+	Total     float64
 }
 
 var maleSalutations = stringSet(
@@ -1725,15 +1768,15 @@ func getStoreItem(itemID int) (item Item, err error) {
 	return
 }
 
-func getCartWithCartID(cartID int) (cart []CartItem, total float64, userID int) {
+func getCartWithCartID(cartID int) (cart Cart, userID int) {
 	db, err := sql.Open("sqlite3", DatabaseURL)
 	if err != nil {
 		return
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT account_id, item_id, name, price, count, image "+
-		"FROM carts, itemsInACart, items WHERE carts.id = cart_id AND carts.id = ? AND item_id = items.ID", cartID)
+	rows, err := db.Query("SELECT username, first_name, last_name, date_paid, user_account.id, item_id, name, price, count, image, status "+
+		"FROM carts, itemsInACart, items, user_account, user_profile WHERE user_account.id = user_profile.account_id AND carts.account_id = user_account.id AND carts.id = cart_id AND carts.id = ? AND item_id = items.ID", cartID)
 
 	if err != nil {
 		fmt.Println(err.Error())
@@ -1742,10 +1785,10 @@ func getCartWithCartID(cartID int) (cart []CartItem, total float64, userID int) 
 
 	for rows.Next() {
 		var item CartItem
-		rows.Scan(&userID, &item.ID, &item.Name, &item.Price, &item.Count, &item.Image)
+		rows.Scan(&cart.Username, &cart.FirstName, &cart.LastName, &cart.DatePaid, &userID, &item.ID, &item.Name, &item.Price, &item.Count, &item.Image, &cart.Status)
 		item.Total = item.Price * float64(item.Count)
-		total = total + item.Total
-		cart = append(cart, item)
+		cart.Total = cart.Total + item.Total
+		cart.Items = append(cart.Items, item)
 	}
 
 	return
@@ -1821,14 +1864,52 @@ func getTransactions(userID int) (carts []Cart) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, total FROM carts WHERE account_id = ? AND status = ?", userID, Paid)
+	rows, err := db.Query("SELECT id, total, date_paid FROM carts WHERE account_id = ? AND status = ?", userID, Paid)
 	if err != nil {
 		return
 	}
 
 	for rows.Next() {
 		var cart Cart
-		rows.Scan(&cart.ID, &cart.Total)
+		rows.Scan(&cart.ID, &cart.Total, &cart.DatePaid)
+		carts = append(carts, cart)
+	}
+	return carts
+}
+
+func getAllTransactions(earlierThan, laterThan string) (carts []Cart) {
+	db, err := sql.Open("sqlite3", DatabaseURL)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	var rows *sql.Rows
+	if len(earlierThan) == 0 && len(laterThan) == 0 {
+		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ?", None)
+		if err != nil {
+			return
+		}
+	} else if len(earlierThan) != 0 && len(laterThan) != 0 {
+		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid < ? AND date_paid > ?", None, earlierThan, laterThan)
+		if err != nil {
+			return
+		}
+	} else if len(earlierThan) != 0 {
+		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid < ?", None, earlierThan)
+		if err != nil {
+			return
+		}
+	} else if len(laterThan) != 0 {
+		rows, err = db.Query("SELECT carts.id, username, status, total, date_paid FROM carts, user_account, user_profile WHERE user_profile.account_id = user_account.id AND user_profile.account_id = user_account.id AND status != ? AND date_paid > ?", None, laterThan)
+		if err != nil {
+			return
+		}
+	}
+
+	for rows.Next() {
+		var cart Cart
+		rows.Scan(&cart.ID, &cart.Username, &cart.Status, &cart.Total, &cart.DatePaid)
 		carts = append(carts, cart)
 	}
 	return carts
@@ -2134,7 +2215,8 @@ func addBought(userID, cartID int, bought float64) error {
 	}
 	defer db.Close()
 
-	_, total, _ := getCartWithCartID(cartID)
+	cart, _ := getCartWithCartID(cartID)
+	total := cart.Total
 
 	if bought != total {
 		return errors.New("Not the same with total")
@@ -2245,6 +2327,7 @@ func main() {
 	http.HandleFunc("/delete-item", deleteItemHandler)
 	http.HandleFunc("/edit-item/", editItemHandler)
 	http.HandleFunc("/edit-item", editItemHandler)
+	http.HandleFunc("/view-all-transactions", viewAllHandler)
 
 	http.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./images"))))
 	http.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./styles"))))
