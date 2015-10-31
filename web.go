@@ -1065,12 +1065,12 @@ func updateItemCountHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		cartID, err := strconv.Atoi(r.FormValue("cart_id"))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "cart_id must be a number", http.StatusBadRequest)
 			return
 		}
 		itemID, err := strconv.Atoi(r.FormValue("item_id"))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "item_id must be a number", http.StatusBadRequest)
 			return
 		}
 		userID, _ := getUserID(r)
@@ -1243,7 +1243,7 @@ func deleteItemHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		itemID, err := strconv.Atoi(r.FormValue("item_id"))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "item_id must be an integer", http.StatusBadRequest)
 			return
 		}
 		if itemID < 4 {
@@ -2026,9 +2026,9 @@ func updateCartStatusPaid(paymentID string) error {
 	defer db.Close()
 
 	var userID int
-	db.QueryRow("SELECT account_id FROM carts WHERE payment_id = ?", paymentID).Scan(&userID)
+	err = db.QueryRow("SELECT account_id FROM carts WHERE payment_id = ? AND status != ?", paymentID, Paid).Scan(&userID)
 	if err != nil {
-		return err
+		return errors.New("Either paid already or such payment was cancelled.")
 	}
 
 	_, total, _, _, _ := getCart(userID)
