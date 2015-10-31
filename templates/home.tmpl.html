@@ -3,6 +3,11 @@
   <title>Personal Details</title>
   <link rel="stylesheet" type="text/css" href="/styles/style.css">
 <body>
+  <style>
+    .badge {
+      max-width:200px;
+    }
+  </style>
   <div class="headerBlue">
      <a href="/" style="font-weight:normal;"><img class="hexLogo" src="/images/hexagonLogo.png">
      <div class="hexText">T<span class="hexTextSm">HE</span> H<span class="hexTextSm">EXAGON</span></div>
@@ -28,9 +33,12 @@
       <br>
       <h3>Earned Badges</h3>
       {{range .Badges}}
+        <div style="display:inline-block;">
+        <img class="badge" src="/images/{{.ID}}.png"> <br>
         {{.Description}}<br>
+        </div>
       {{end}}
-      
+      <br>
       {{if not .Viewing}}
       <a href="/edit"> Edit Profile </a> <br>
       <a href="/store">Store Page</a><br>

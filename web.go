@@ -2064,6 +2064,7 @@ func updateCartStatusPaid(paymentID string) error {
 	tx.Commit()
 
 	checkBoughtBadges(userID)
+	checkDonateBadges(userID)
 	checkEarnedBadges(userID)
 	return nil
 }
@@ -2351,7 +2352,7 @@ func checkDonateBadges(userID int) {
 	defer db.Close()
 
 	var sum float64
-	err = db.QueryRow("SELECT SUM(price) FROM carts, itemsInACart, items WHERE carts.id = itemsInACart.cart_id AND items.id = itemsInACart.item_id AND account_id = ? AND status = ? AND (items.id = 1 OR items.id = 2 OR items.id = 3)", userID, Paid).Scan(&sum)
+	err = db.QueryRow("SELECT SUM(price*count) FROM carts, itemsInACart, items WHERE carts.id = itemsInACart.cart_id AND items.id = itemsInACart.item_id AND account_id = ? AND status = ? AND (items.id = 1 OR items.id = 2 OR items.id = 3)", userID, Paid).Scan(&sum)
 	if err != nil {
 		return
 	}
@@ -2427,6 +2428,7 @@ func checkEarnedBadges(userID int) {
 
 type Badge struct {
 	Description string
+	ID          int
 }
 
 func getAllBadges(userID int) (badges []Badge) {
@@ -2436,14 +2438,14 @@ func getAllBadges(userID int) (badges []Badge) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT description FROM earned_badges WHERE account_id = ?", userID)
+	rows, err := db.Query("SELECT badge_id, description FROM earned_badges WHERE account_id = ?", userID)
 	if err != nil {
 		return
 	}
 
 	for rows.Next() {
 		var badge Badge
-		rows.Scan(&badge.Description)
+		rows.Scan(&badge.ID, &badge.Description)
 		badges = append(badges, badge)
 	}
 	return
