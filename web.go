@@ -763,13 +763,6 @@ func storePageHandler(w http.ResponseWriter, r *http.Request) {
 			userID,
 		}
 		renderPage(w, "store", data)
-	case "POST":
-		if !isAdmin(r) {
-			http.Redirect(w, r, "/", http.StatusFound)
-			return
-		}
-		backUpMessages()
-		http.Redirect(w, r, "/backup", http.StatusFound)
 	default:
 		errorPage(w, http.StatusMethodNotAllowed)
 	}
@@ -1062,6 +1055,10 @@ func viewTransactionsHandler(w http.ResponseWriter, r *http.Request) {
 func updateItemCountHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
+		if !isLoggedIn(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
 		cartID, err := strconv.Atoi(r.FormValue("cart_id"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1110,12 +1107,12 @@ func getAccessToken() (string, error) {
 }
 
 func payHandler(w http.ResponseWriter, r *http.Request) {
-	if !isLoggedIn(r) {
-		http.Redirect(w, r, "/", http.StatusFound)
-		return
-	}
 	switch r.Method {
 	case "POST":
+		if !isLoggedIn(r) {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
 		duration, _ := time.ParseDuration("0s")
 		client := &http.Client{
 			Timeout: duration,
@@ -2157,7 +2154,7 @@ func createDB() error {
 			status INTEGER,
 			payment_id TEXT,
       url TEXT DEFAULT '',
-      date_paid DATE,
+      date_paid DATE DEFAULT '',
       
 			FOREIGN KEY(account_id) REFERENCES user_account(id)
 		)
