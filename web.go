@@ -1009,6 +1009,10 @@ func viewSpecificCartHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		userID, _ := getUserID(r)
 		cart, userID2 := getCartWithCartID(cartID)
+		if userID2 == 0 {
+			http.Error(w, "No such cart.", http.StatusBadRequest)
+			return
+		}
 		if userID != userID2 && !isAdmin(r) {
 			http.Error(w, "Unauthorized access.", http.StatusBadRequest)
 			return
