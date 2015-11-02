@@ -26,7 +26,7 @@
       <b>{{.Item.Name}}</b><br>
       <img src="{{.Item.Image}}">
       {{.Item.Description}}<br>
-      {{.Item.Price}}<br>
+      ${{.Item.Price}}<br>
       {{if and .IsAdmin (gt .Item.ID 3)}}
       <a href="/edit-item/{{.Item.ID}}">Edit Item</a>
       {{end}}

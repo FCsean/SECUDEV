@@ -20,7 +20,7 @@
       <a href="/store">Back to Store</a><br>
 
       {{range .Transactions}}
-        <a href="/view-cart/{{.ID}}">{{.ID}}</a> - {{.Total}} - {{.DatePaid}}<br>
+        <a href="/view-cart/{{.ID}}">{{.ID}}</a> - ${{.Total}} - {{.DatePaid}}<br>
       {{end}}
       
     </div>

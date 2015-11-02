@@ -28,13 +28,13 @@
       <form action="/update-cart" method="POST">
         <input type="hidden" name="cart_id" value="{{$.CartID}}">
         <input type="hidden" name="item_id" value="{{.ID}}">
-        <a href="/view-item/{{.ID}}">{{.Name}}</a> - <img src="{{.Image}}" style="max-height:30px;max-width:30px;"> - {{.Price}} - 
+        <a href="/view-item/{{.ID}}">{{.Name}}</a> - <img src="{{.Image}}" style="max-height:30px;max-width:30px;"> - ${{.Price}} - 
         <input type="text" name="count" value="{{.Count}}">
-         - {{.Total}}
+         - ${{.Total}}
         {{if $.Pay}}<input type="submit" value="Update">{{end}}
       </form>
       {{end}}
-      Total: {{.Total}}
+      Total: ${{.Total}}
       {{if .Pay}}
       <form name="_xclick" action="/pay-now" method="post">
       <input type="submit" src="http://www.paypal.com/en_GB/i/btn/x-click-but01.gif" border="0" name="submit" alt="Make payments with PayPal - it's fast, free and secure!">

@@ -66,12 +66,12 @@
       <div style="display:inline-block;">
       <a href="/view-item/{{.ID}}"><b>{{.Name}}</b></a><br>
       <img src="{{.Image}}" class="image">
-      {{.Price}}<br>
+      ${{.Price}}<br>
       <form action="/add-cart" method="POST">
       <input type="hidden" name="item_id" value="{{.ID}}">
       <input type="submit" value="Add to Cart">
       </form>
-      {{if gt .ID 3 }}
+      {{if and (gt .ID 3) $.IsAdmin }}
       <form action="/delete-item" method="POST">
       <input type="hidden" name="item_id" value="{{.ID}}">
       <input type="submit" value="Delete">
