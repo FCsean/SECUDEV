@@ -1221,10 +1221,14 @@ func successHandler(w http.ResponseWriter, r *http.Request) {
 		req, err = http.NewRequest("POST", "https://api.sandbox.paypal.com/v1/payments/payment/"+paymentID+"/execute/", strings.NewReader(`{"payer_id":"`+payerID+`"}`))
 		req.Header.Add("Content-Type", "application/json")
 		req.Header.Add("Authorization", "Bearer "+accessToken+"")
-		_, err = client.Do(req)
+		resp, err := client.Do(req)
 
 		if err != nil {
 			http.Error(w, "Paypal dead", http.StatusBadRequest)
+			return
+		}
+		if resp.StatusCode != 200 {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
