@@ -49,6 +49,10 @@ func initTemplates() {
 			s = template.HTMLEscapeString(s)
 			imageTags := regexp.MustCompile(`&lt;img\s+src=&#34;(.*?)&#34;&gt;`)
 			s = imageTags.ReplaceAllString(s, `<img src="$1" style="max-width:570px;">`)
+			itemTags := regexp.MustCompile(`\[item\](\d+)\[/item\]`)
+			if itemTags.MatchString(s) {
+				s = itemTags.ReplaceAllString(s, getItemInString(itemTags.FindStringSubmatch(s)[1]))
+			}
 			linkTags := regexp.MustCompile(`&lt;a\s+href=&#34;(.*?)&#34;&gt;(.*?)&lt;/a&gt;`)
 			s = linkTags.ReplaceAllString(s, `<a href="$1">$2</a>`)
 			unescapeTags := regexp.MustCompile("&lt;(/?(b|i|pre|u|sub|sup|strike|marquee))&gt;")
@@ -84,6 +88,18 @@ func initTemplates() {
 			return template.URL(s)
 		},
 	}).ParseGlob("./templates/*.tmpl.html"))
+}
+
+func getItemInString(itemID string) string {
+	intItemID, err := strconv.Atoi(itemID)
+	if err != nil {
+		return "Invalid item id"
+	}
+	item, err := getStoreItem(intItemID)
+	if err != nil {
+		return "No such item."
+	}
+	return "<a href=\"/view-item/" + fmt.Sprintf("%v", itemID) + "\">Name: " + item.Name + "</a><br>" + "<img style=\"max-width:200px;\" src=\"" + item.Image + "\"><br>Price: " + fmt.Sprintf("%v", item.Price)
 }
 
 func renderPage(w http.ResponseWriter, template string, data interface{}) {
@@ -553,7 +569,7 @@ func registrationPage(w http.ResponseWriter, r *http.Request) {
 
 		userID, err := register(username, password, admin, profile)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "username taken", http.StatusBadRequest)
 			return
 		}
 
@@ -984,7 +1000,7 @@ func viewCartHandler(w http.ResponseWriter, r *http.Request) {
 			cart,
 			cartID,
 			userID,
-			true && status == None,
+			true && status != Paid,
 			url,
 			status,
 			token,
@@ -1023,12 +1039,14 @@ func viewSpecificCartHandler(w http.ResponseWriter, r *http.Request) {
 			Pay    bool
 			CartID int
 			Cart   Cart
+			Status int
 		}{
 			cart.Total,
 			cart.Items,
 			false,
 			cartID,
 			cart,
+			-1,
 		}
 		renderPage(w, "view-cart", data)
 	default:
@@ -1076,7 +1094,7 @@ func updateItemCountHandler(w http.ResponseWriter, r *http.Request) {
 		userID, _ := getUserID(r)
 		count, err := strconv.Atoi(r.FormValue("count"))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "count must be a number", http.StatusBadRequest)
 			return
 		}
 		if count == 0 {
@@ -1198,22 +1216,21 @@ func successHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		paymentID := r.FormValue("paymentId")
 		payerID := r.FormValue("PayerID")
-		err = updateCartStatusPaid(paymentID)
+
+		var req *http.Request
+		req, err = http.NewRequest("POST", "https://api.sandbox.paypal.com/v1/payments/payment/"+paymentID+"/execute/", strings.NewReader(`{"payer_id":"`+payerID+`"}`))
+		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Authorization", "Bearer "+accessToken+"")
+		_, err = client.Do(req)
+
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "Paypal dead", http.StatusBadRequest)
 			return
 		}
 
-		err = errors.New("error")
-		for err != nil {
-			var req *http.Request
-			req, err = http.NewRequest("POST", "https://api.sandbox.paypal.com/v1/payments/payment/"+paymentID+"/execute/", strings.NewReader(`{"payer_id":"`+payerID+`"}`))
-			req.Header.Add("Content-Type", "application/json")
-			req.Header.Add("Authorization", "Bearer "+accessToken+"")
-			_, err = client.Do(req)
-		}
+		err = updateCartStatusPaid(paymentID)
 		if err != nil {
-			http.Error(w, "Paypal dead", http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -2316,7 +2333,7 @@ func addDonation(userID int, donation float64) error {
 }
 
 func redir(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/ipn" {
+	if r.URL.Path == "/seansipnhandleronoderabestgirl" {
 		ipnHandler(w, r)
 	} else {
 		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
@@ -2472,7 +2489,7 @@ func main() {
 	http.HandleFunc("/store", storePageHandler)
 	http.HandleFunc("/add-item", addItemHandler)
 	http.HandleFunc("/view-item/", viewItemHandler)
-	http.HandleFunc("/ipn", ipnHandler)
+	http.HandleFunc("/seansipnhandleronoderabestgirl", ipnHandler)
 	http.HandleFunc("/add-cart", addToCartHandler)
 	http.HandleFunc("/view-cart", viewCartHandler)
 	http.HandleFunc("/view-cart/", viewSpecificCartHandler)

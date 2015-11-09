@@ -35,13 +35,13 @@
       </form>
       {{end}}
       Total: ${{.Total}}
-      {{if .Pay}}
+      {{if and .Pay (eq .Status 1)}}
       <form name="_xclick" action="/pay-now" method="post">
       <input type="submit" src="http://www.paypal.com/en_GB/i/btn/x-click-but01.gif" border="0" name="submit" alt="Make payments with PayPal - it's fast, free and secure!">
       </form>
       {{end}}
       {{if .Pay}}
-      {{if and (eq .Status 2) .Pay}}
+      {{if and .Pay (eq .Status 2)}}
       <br><a href="/cancel?token={{.Token}}">Cancel</a>
       <br><a href="{{.URL}}">Pay Now</a>
       {{end}}
