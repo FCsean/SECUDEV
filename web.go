@@ -569,7 +569,7 @@ func registrationPage(w http.ResponseWriter, r *http.Request) {
 
 		userID, err := register(username, password, admin, profile)
 		if err != nil {
-			http.Error(w, "username taken", http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -1535,7 +1535,7 @@ func register(username, password string, admin bool, profile UserProfile) (int, 
 		username, hashedPassword, admin, time.Now())
 	if err != nil {
 		tx.Rollback()
-		return 0, err
+		return 0,  errors.New("Invalid username.")
 	}
 
 	userID, err := result.LastInsertId()
