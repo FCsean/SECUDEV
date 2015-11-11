@@ -987,7 +987,7 @@ func viewCartHandler(w http.ResponseWriter, r *http.Request) {
 			token = url[len("https://www.sandbox.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token="):]
 		}
 		data := struct {
-			Total  float64
+			Total  string
 			Items  []CartItem
 			CartID int
 			UserID int
@@ -996,7 +996,7 @@ func viewCartHandler(w http.ResponseWriter, r *http.Request) {
 			Status int
 			Token  string
 		}{
-			total,
+			fmt.Sprintf("%.2f", total),
 			cart,
 			cartID,
 			userID,
@@ -1176,7 +1176,7 @@ func payHandler(w http.ResponseWriter, r *http.Request) {
       "transactions":[
         {
           "amount":{
-            "total":"`+fmt.Sprintf("%v", total)+`",
+            "total":"`+fmt.Sprintf("%.2f", total)+`",
             "currency":"USD"
           },
           "description":"This is the payment transaction description.",`+items+
@@ -1535,7 +1535,7 @@ func register(username, password string, admin bool, profile UserProfile) (int, 
 		username, hashedPassword, admin, time.Now())
 	if err != nil {
 		tx.Rollback()
-		return 0,  errors.New("Invalid username.")
+		return 0, errors.New("Invalid username.")
 	}
 
 	userID, err := result.LastInsertId()
